@@ -19,6 +19,11 @@
     #info td:first-child { padding-right: 10px; color: #e9eef5; white-space: nowrap; }
     #info #vr-note { color: #f7a35c; }
     #info #vr-note[hidden] { display: none; }
+    #info { transition: transform 0.25s ease; }
+    #info.collapsed { transform: translateX(calc(100% + 16px)); }
+    #info-toggle { position: absolute; left: -30px; top: 8px; width: 26px; height: 32px; border: 0; border-radius: 8px 0 0 8px;
+                   background: rgba(14,18,25,0.82); color: #5ce1ff; font-size: 14px; cursor: pointer; pointer-events: auto; }
+    #info-toggle:hover { color: #ffffff; }
   </style>
   <script type="importmap">
     { "imports": {
@@ -29,6 +34,7 @@
 </head>
 <body>
   <div id="info">
+    <button id="info-toggle" title="Hide help" aria-label="Hide help" aria-expanded="true">▶</button>
     <b>Formboard VR</b> · wire harness assembly training
     <p>On Quest 3: press <i>Enter VR</i>, then point and pinch (or trigger).</p>
     <p id="vr-note" hidden>VR needs a WebXR browser: open this link in the Quest 3 browser. Here it runs in desktop mode.</p>
@@ -40,6 +46,23 @@
     </table>
   </div>
   <button id="back-to-board" hidden>← Back to formboard</button>
+  <script>
+    // Help box slides out to the right; the choice is remembered per browser when storage is available.
+    (() => {
+      const info = document.getElementById('info'), btn = document.getElementById('info-toggle');
+      const set = (collapsed) => {
+        info.classList.toggle('collapsed', collapsed);
+        btn.textContent = collapsed ? '◀' : '▶';
+        btn.title = btn.ariaLabel = collapsed ? 'Show help' : 'Hide help';
+        btn.setAttribute('aria-expanded', String(!collapsed));
+        try { localStorage.setItem('formboard-help-collapsed', collapsed ? '1' : '0'); } catch {}
+      };
+      let saved = false;
+      try { saved = localStorage.getItem('formboard-help-collapsed') === '1'; } catch {}
+      set(saved);
+      btn.addEventListener('click', () => set(!info.classList.contains('collapsed')));
+    })();
+  </script>
   <script type="module" src="./src/main.js"></script>
 </body>
 </html>

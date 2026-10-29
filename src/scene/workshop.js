@@ -77,8 +77,13 @@ export function buildWorkshop(scene) {
   const bar = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.02, 0.02), metal);
   bar.position.set(0, 0.72, 0);
   rack.add(bar);
-  rack.position.set(1.15, 0, -0.45);
-  rack.rotation.y = -0.4;
+  for (const x of [-0.2, 0.2]) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.72, 0.02), metal);
+    post.position.set(x, 0.36, 0);
+    rack.add(post);
+  }
+  rack.position.set(-1.75, 0, -1.25);
+  rack.rotation.y = 0.5;
   scene.add(rack);
 
   return { metal };

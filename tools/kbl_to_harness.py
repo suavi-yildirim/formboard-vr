@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
-"""Convert a KBL harness plus a formboard layout into harness.json for the VR app.
+"""Build the app data: KBL harnesses -> formboard harness JSON, plus the 3D vehicle view.
+
+Door harness: simplified, fictitious KBL plus a hand-made formboard layout.
 
 KBL describes wiring (connectors, wires, connections, modules) but in this demo carries no
 formboard geometry. The layout file places connectors, pegs and branch points on the board grid
 and lists the bundle segments. Each wire's routing path is the shortest path through that
 topology between its two connectors.
 
+VW Old Beetle: real KBL, flattened by real_kbl.py.
+
 Usage:
-  python3 tools/kbl_to_harness.py            # writes src/data/harness.json
+  python3 tools/kbl_to_harness.py            # writes src/data/*.json
   python3 tools/kbl_to_harness.py --check    # validate only, non-zero exit on problems
 """
 import argparse
@@ -17,10 +21,16 @@ import xml.etree.ElementTree as ET
 from collections import deque
 from pathlib import Path
 
+from real_kbl import formboard, vehicle
+
 ROOT = Path(__file__).resolve().parent.parent
 KBL = ROOT / "data" / "door_harness_kbl.xml"
 LAYOUT = ROOT / "data" / "board_layout.json"
-OUT = ROOT / "src" / "data" / "harness.json"
+VW = ROOT / "data" / "vw"
+VW_MOVO = VW / "kblxml_2.3sr-1_000971619_ltgs_movo_170718.kbl"
+VW_FULL = VW / "kblxml_2.4sr-1_tab016120_modulare_ltgs._160718.kbl"
+OUT = ROOT / "src" / "data"
+VW_SOURCE = "VW VOBES \"Old Beetle\" sample (prostep ivip ECAD wiki), CC BY-SA 4.0"
 
 
 def read_kbl(path):
@@ -94,11 +104,13 @@ def build(kbl, layout):
         wires.append({
             "id": c["wire"], "colour": w["colour"],
             "cross_section_mm2": float(w["cross_section_mm2"]), "length_mm": int(w["length_mm"]),
-            "signal": c["signal"], "from": c["ends"][0], "to": c["ends"][1], "path": path,
+            "signal": c["signal"], "from": c["ends"][0], "to": c["ends"][1],
+            "from_node": path[0], "to_node": path[-1], "path": path,
         })
 
     harness = {
-        "id": kbl["id"], "description": kbl["description"], "board": layout["board"],
+        "id": kbl["id"], "description": kbl["description"], "source": "Fictitious demo data",
+        "board": layout["board"],
         "nodes": nodes, "segments": layout["segments"], "modules": kbl["modules"], "wires": wires,
     }
     return harness, problems
@@ -108,17 +120,28 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true")
     args = ap.parse_args()
-    harness, problems = build(read_kbl(KBL), json.loads(LAYOUT.read_text(encoding="utf-8")))
+    door, problems = build(read_kbl(KBL), json.loads(LAYOUT.read_text(encoding="utf-8")))
+    movo = formboard(VW_MOVO, "Engine compartment ignition harness (VW Old Beetle)", VW_SOURCE)
+    if movo["skipped_connections"]:
+        problems.append(f"VW: connections without a board path: {movo['skipped_connections']}")
     for p in problems:
         print("problem:", p, file=sys.stderr)
     if problems:
         sys.exit(1)
+    outputs = {"door.json": door, "vw_movo.json": movo, "vw_vehicle.json": vehicle(VW_FULL, VW_MOVO)}
+    index = [{"file": "vw_movo.json", "label": "VW ignition harness", "note": "real KBL"},
+             {"file": "door.json", "label": "Door harness", "note": "fictitious, variants"}]
     if args.check:
-        print(f"ok: {len(harness['wires'])} wires routed on {len(harness['nodes'])} nodes")
+        print(f"ok: door {len(door['wires'])} wires, VW {len(movo['wires'])} wires, flattening {movo['flattening']}")
         return
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(harness, ensure_ascii=False, indent=1), encoding="utf-8")
-    print(f"wrote {OUT.relative_to(ROOT)}: {len(harness['wires'])} wires")
+    OUT.mkdir(parents=True, exist_ok=True)
+    for name, data in outputs.items():
+        (OUT / name).write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        print(f"wrote src/data/{name}")
+    (OUT / "harnesses.json").write_text(json.dumps(index, ensure_ascii=False, indent=1), encoding="utf-8")
+    old = OUT / "harness.json"
+    if old.exists():
+        old.unlink()
 
 
 if __name__ == "__main__":

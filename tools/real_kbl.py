@@ -20,7 +20,6 @@ COLOURS = {"sw": "BK", "blk": "BK", "ws": "WH", "rt": "RD", "ro": "RD", "bl": "B
 
 MIN_NODE_GAP_MM = 55     # nodes closer than this on the board push apart
 PEG_SPACING_MM = 160     # one fork peg per this much segment length
-SNAP_LIMIT = 0.45        # snap radius at most this fraction of the shortest board edge
 
 
 class Kbl:
@@ -263,12 +262,12 @@ def formboard(path, title, source):
     return {
         "id": h.findtext("Part_number"), "description": f"{title}", "source": source,
         "board": {"cols": cols, "rows": rows, "pitch_mm": pitch},
-        "snap_mm": round(min(32, SNAP_LIMIT * min(edge_len))),
+        "min_edge_mm": round(min(edge_len)),
         "nodes": out_nodes, "segments": out_segments,
         "modules": [{"id": "ALL", "label": "Complete harness", "wires": [w["id"] for w in wires]}],
         "wires": wires,
-        "flattening": {"segments": len(segs), "max_length_error_pct": round(max(errs) * 100, 2),
-                       "mean_length_error_pct": round(sum(errs) / len(errs) * 100, 2)},
+        "flattening": {"segments": len(segs), "max_length_error_pct": round(float(max(errs)) * 100, 2),
+                       "mean_length_error_pct": round(float(sum(errs) / len(errs)) * 100, 2)},
         "skipped_connections": skipped,
     }
 

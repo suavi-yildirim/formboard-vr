@@ -6,6 +6,27 @@ import { COLOURS } from '../core/harness.js';
 const WIRE_Z = 0.03; // wires lie in the peg forks
 const CONNECTOR_Z = 0.016;
 
+// Wire insulation: base colour with a lengthwise tracer stripe (Kennfarbe), as a small texture.
+const stripeCache = new Map();
+function wireMaterial(wire, extra = {}) {
+  const base = COLOURS[wire.colour] ?? 0xcccccc;
+  if (!wire.stripe) return new THREE.MeshStandardMaterial({ color: base, roughness: 0.45, ...extra });
+  const key = `${wire.colour}/${wire.stripe}`;
+  if (!stripeCache.has(key)) {
+    const c = document.createElement('canvas');
+    c.width = 4; c.height = 32;
+    const g = c.getContext('2d');
+    const hex = (v) => `#${v.toString(16).padStart(6, '0')}`;
+    g.fillStyle = hex(base); g.fillRect(0, 0, 4, 32);
+    g.fillStyle = hex(COLOURS[wire.stripe] ?? 0xffffff); g.fillRect(0, 4, 4, 8); g.fillRect(0, 20, 4, 8);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.magFilter = THREE.NearestFilter;
+    stripeCache.set(key, t);
+  }
+  return new THREE.MeshStandardMaterial({ color: 0xffffff, map: stripeCache.get(key), roughness: 0.45, ...extra });
+}
+
 export function wireRadius(crossSectionMm2) {
   return (1.8 + crossSectionMm2 * 0.8) / 1000;
 }
@@ -46,7 +67,7 @@ export class WireLayer {
 
   setDone(wire, pointsMm) {
     this.removeDone(wire.id);
-    const mat = new THREE.MeshStandardMaterial({ color: COLOURS[wire.colour] ?? 0xcccccc, roughness: 0.45, transparent: true });
+    const mat = wireMaterial(wire, { transparent: true });
     const mesh = this.tube(this.points3(pointsMm), wireRadius(wire.cross_section_mm2), mat);
     this.group.add(mesh);
     this.done.set(wire.id, mesh);
@@ -73,7 +94,7 @@ export class WireLayer {
   setLive(wire, pointsMm, tipConnector = false) {
     this.clearLive();
     if (!wire || pointsMm.length < 2) return;
-    const mat = new THREE.MeshStandardMaterial({ color: COLOURS[wire.colour] ?? 0xcccccc, roughness: 0.4, emissive: COLOURS[wire.colour] ?? 0, emissiveIntensity: 0.25 });
+    const mat = wireMaterial(wire, { emissive: COLOURS[wire.colour] ?? 0, emissiveIntensity: 0.2 });
     this.live = this.tube(this.points3(pointsMm, [true, tipConnector]), wireRadius(wire.cross_section_mm2), mat);
     this.group.add(this.live);
   }

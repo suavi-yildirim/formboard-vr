@@ -8,26 +8,30 @@ VR training for wire-harness assembly on a formboard. It runs in the browser on 
 
 ## What it does
 
-1. **Choose the variant.** Variants come from the KBL modules (base equipment, comfort, ambient light, full).
+1. **Choose the harness.**
+   - The **VW ignition harness** is real KBL data from the public VW "Old Beetle" sample: 18 wires, 20 connectors, flattened from the 3D vehicle geometry onto a 1:1 formboard.
+   - The **door harness** is a fictitious example with variants that come from the KBL modules (base equipment, comfort, ambient light, full).
 2. **Board prep.** Ghost pegs show where the guide pegs and Y-pegs go, and you set each one.
 3. **Routing, one wire at a time.** Grab the glowing wire end at the start connector and pull it along the board.
    - The wire snaps to the next correct peg, with sound and haptic feedback.
-   - A wrong branch or a skipped peg flashes red and counts as an error.
+   - A wrong branch or a skipped peg flashes red and counts as an error. Passing near other pegs while staying on track does not.
    - Reaching the target connector completes the wire, and earlier wires fade back.
 4. **Two modes.**
    - **Guided** shows the path and the next peg.
    - **Test** shows only the target connector, so you route from the board drawing. Hints ("Show me") are counted.
 5. **Quality check and summary.** You get the time and errors per wire, plus a JSON log for evaluation.
+6. **Vehicle view.** To your right stands the complete VW vehicle harness at 1:1 (183 segments, from the KBL centre lines). The ignition harness you just built glows orange where it sits in the car. On desktop, use the *Vehicle view* button.
 
 ## Data: from KBL to formboard
 
 KBL (VDA 4964) describes the wiring: connectors, wires, connections, modules and routing. A formboard needs a flat 1:1 layout.
 `tools/` turns one into the other:
 
-- `kbl_to_harness.py` takes a KBL plus a formboard layout and writes `src/data/harness.json`. Each wire's path is the shortest path through the bundle topology.
-- `real_kbl.py` works on real KBL 2.3/2.4 files. It reads nodes, segments, connectors, wire colours and cross-sections, and the real **routing of every wire**.
-  - It flattens the 3D harness onto the board while keeping every segment at its true length, starting from a plane projection and relaxing the layout.
-  - It adds fork pegs along long segments and Y-pegs at branch points.
+- `real_kbl.py` works on real KBL 2.3/2.4 files. It reads nodes, segments, connectors (including ring terminals placed as special terminals), wire colours with tracer stripes, cross-sections, and the real **routing of every wire**.
+  - **Flattening:** a formboard keeps every segment at its true length, because wires are cut to length, but the branches may turn freely. The layout starts from a plane projection (PCA, viewed from above, never mirrored). It is then relaxed: segment lengths are held at the KBL `Virtual_length`, and nodes that come too close push apart. For the VW harness, all 30 segments end at their true length.
+  - **Pegs:** fork pegs along long segments (one every 160 mm) and Y-pegs at branch points.
+  - **Vehicle view:** the B-spline centre lines of the full vehicle harness in vehicle coordinates.
+- `kbl_to_harness.py` builds all app data (`src/data/*.json`). For the fictitious door harness it uses a hand-made layout (`data/board_layout.json`) and shortest paths through the bundle topology.
 
 Data in this repository:
 - **Door harness:** fictitious, from the [KBL knowledge-graph demo](https://github.com/suavi-yildirim/bordnetz-knowledge-graph).
@@ -50,3 +54,4 @@ Run locally: `python3 -m http.server`, then open http://localhost:8000. Tests: `
 - Mixed reality on a physical board: Quest passthrough, with the board registered by markers on opposite corners or by a two-point touch calibration
 - Unity 6 + Meta XR SDK port for the lab version, using the same `harness.json`
 - Study mode: compare guided and test runs, and paper vs. VR instructions, using the logged times and errors
+- Real formboard layouts: read the 2D formboard drawing from the harness CAD export when it is available, instead of flattening

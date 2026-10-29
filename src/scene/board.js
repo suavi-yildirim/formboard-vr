@@ -1,7 +1,8 @@
 // The formboard: perforated surface with the 1:1 drawing, connectors, pegs, halos and flashes.
 // Board group local space: metres, origin at the grid centre, x right, y up, z out of the surface.
 import * as THREE from 'three';
-import { boardSizeMm, colName, cellToMm } from '../core/grid.js';
+import { boardSizeMm, colName } from '../core/grid.js';
+import { nodePositions } from '../core/harness.js';
 
 const MARGIN_MM = 45;
 const TEX_PX_PER_MM = 1.6;
@@ -12,8 +13,9 @@ export class Board {
     this.h = harness;
     this.size = boardSizeMm(harness.board);
     this.group = new THREE.Group();
-    this.pos = {};
-    for (const n of harness.nodes) this.pos[n.id] = cellToMm(n.cell, harness.board.pitch_mm);
+    this.pos = nodePositions(harness);
+    // Real harnesses have connectors only a few cm apart: smaller bodies, id-only labels.
+    this.dense = (harness.min_edge_mm ?? 100) < 60;
     this.pegs = {};
     this.halos = {};
     this.flashes = [];
@@ -85,11 +87,16 @@ export class Board {
     g.font = `${11 * s}px system-ui, sans-serif`;
     for (const n of this.h.nodes) {
       if (n.kind === 'connector') continue;
-      g.fillText(`${n.id} · ${n.cell}`, X(this.pos[n.id].x), Y(this.pos[n.id].y - 22));
+      if (n.kind === 'peg' && this.dense) continue;
+      g.fillText(n.cell ? `${n.id} · ${n.cell}` : n.id, X(this.pos[n.id].x), Y(this.pos[n.id].y - 22));
     }
     g.textAlign = 'left';
     g.font = `bold ${13 * s}px system-ui, sans-serif`;
     g.fillText(`${this.h.id} · ${this.h.description} · formboard 1:1`, X(8), Y(h - 14));
+    if (this.h.source) {
+      g.font = `${10 * s}px system-ui, sans-serif`;
+      g.fillText(this.h.source, X(8), Y(10));
+    }
 
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -107,7 +114,7 @@ export class Board {
     // Rear struts down to the bench, so the tilted board does not float.
     for (const x of [-W / 2 + 0.15, W / 2 - 0.15]) {
       const strut = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.5, 0.03), this.metal);
-      strut.position.set(x, -H / 2 + 0.12, -0.13);
+      strut.position.set(x, -H / 2 + 0.12, -0.3);
       strut.rotation.x = 0.55;
       this.group.add(strut);
     }
@@ -115,17 +122,17 @@ export class Board {
 
   buildConnectors() {
     this.connectors = {};
-    const body = new THREE.BoxGeometry(0.07, 0.045, 0.03);
+    const body = this.dense ? new THREE.BoxGeometry(0.03, 0.022, 0.022) : new THREE.BoxGeometry(0.07, 0.045, 0.03);
     for (const n of this.h.nodes.filter((x) => x.kind === 'connector')) {
       const grp = new THREE.Group();
       const mesh = new THREE.Mesh(body, new THREE.MeshStandardMaterial({ color: 0x2b2f36, roughness: 0.5 }));
       mesh.position.z = 0.015;
       grp.add(mesh);
-      const holder = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.012, 0.035), this.metal);
-      holder.position.set(0, -0.03, 0.017);
+      const holder = new THREE.Mesh(this.dense ? new THREE.BoxGeometry(0.04, 0.008, 0.026) : new THREE.BoxGeometry(0.09, 0.012, 0.035), this.metal);
+      holder.position.set(0, this.dense ? -0.016 : -0.03, this.dense ? 0.013 : 0.017);
       grp.add(holder);
-      const label = makeLabel(`${n.id}  ${n.label}`);
-      label.position.set(0, 0.05, 0.04);
+      const label = makeLabel(this.dense ? n.id : `${n.id}  ${n.label}`, this.dense ? 0.07 : 0.16);
+      label.position.set(0, this.dense ? 0.028 : 0.05, 0.04);
       grp.add(label);
       grp.position.copy(this.local(this.pos[n.id]));
       this.group.add(grp);
@@ -164,6 +171,14 @@ export class Board {
       this.group.add(grp);
       this.pegs[n.id] = { grp, set, ghost, drop: 0 };
     }
+  }
+
+  dispose() {
+    this.group.traverse((o) => {
+      o.geometry?.dispose();
+      for (const m of [o.material].flat()) { m?.map?.dispose(); m?.dispose(); }
+    });
+    this.group.removeFromParent();
   }
 
   segmentAngle(id) {
@@ -225,7 +240,7 @@ export class Board {
   }
 }
 
-function makeLabel(text) {
+function makeLabel(text, width = 0.16) {
   const c = document.createElement('canvas');
   c.width = 512; c.height = 96;
   const g = c.getContext('2d');
@@ -238,7 +253,7 @@ function makeLabel(text) {
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false }));
-  s.scale.set(0.16, 0.03, 1);
+  s.scale.set(width, width * 0.1875, 1);
   return s;
 }
 

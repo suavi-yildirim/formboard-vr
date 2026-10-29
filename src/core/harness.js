@@ -1,5 +1,5 @@
 // Harness model: validation, variants, steps and wire geometry on the board (all in mm).
-import { cellToMm, parseCell } from './grid.js';
+import { cellToMm, boardSizeMm } from './grid.js';
 
 export const COLOURS = {
   RD: 0xd7263d, BN: 0x7b4a2a, VT: 0x8e44ad, BU: 0x1f6fd1, GY: 0x9aa0a6, GN: 0x2e9e4f,
@@ -16,11 +16,13 @@ const BUNDLE_SPACING_MM = 7;
 export function validateHarness(h) {
   const problems = [];
   const ids = new Set();
+  const size = boardSizeMm(h.board);
   for (const n of h.nodes) {
+    if (ids.has(n.id)) problems.push(`duplicate node ${n.id}`);
     ids.add(n.id);
     try {
-      const { col, row } = parseCell(n.cell);
-      if (col >= h.board.cols || row >= h.board.rows) problems.push(`node ${n.id} is off the board`);
+      const p = nodePosition(n, h.board);
+      if (p.x < 0 || p.y < 0 || p.x > size.w || p.y > size.h) problems.push(`node ${n.id} is off the board`);
     } catch (e) {
       problems.push(`node ${n.id}: ${e.message}`);
     }
@@ -34,7 +36,7 @@ export function validateHarness(h) {
         problems.push(`wire ${w.id} jumps ${w.path[i - 1]} -> ${w.path[i]} without a segment`);
       }
     }
-    if (w.from.split('.')[0] !== w.path[0] || w.to.split('.')[0] !== w.path.at(-1)) {
+    if (w.from_node !== w.path[0] || w.to_node !== w.path.at(-1)) {
       problems.push(`wire ${w.id} path does not start/end at its connectors`);
     }
   }
@@ -49,6 +51,7 @@ function segKey(a, b) {
 export function variants(h) {
   const [base, ...options] = h.modules;
   const list = [{ id: base.id, label: base.label, modules: [base.id] }];
+  if (!options.length) return list;
   for (const m of options) list.push({ id: `${base.id}+${m.id}`, label: `${base.label} + ${shortLabel(m.label)}`, modules: [base.id, m.id] });
   if (options.length > 1) list.push({ id: 'ALL', label: 'Full equipment', modules: h.modules.map((m) => m.id) });
   return list;
@@ -66,14 +69,20 @@ export function wiresForVariant(h, variant) {
 // Pegs and branch points needed for a set of wires, in board order (left to right).
 export function pegsFor(h, wires) {
   const used = new Set(wires.flatMap((w) => w.path));
+  const pos = nodePositions(h);
   return h.nodes
     .filter((n) => n.kind !== 'connector' && used.has(n.id))
-    .sort((a, b) => parseCell(a.cell).col - parseCell(b.cell).col || parseCell(a.cell).row - parseCell(b.cell).row);
+    .sort((a, b) => pos[a.id].x - pos[b.id].x || pos[a.id].y - pos[b.id].y);
+}
+
+// A node sits either on a grid cell ("H9", hand-made layouts) or at board mm (flattened real KBL).
+export function nodePosition(n, board) {
+  return n.xy ? { x: n.xy[0], y: n.xy[1] } : cellToMm(n.cell, board.pitch_mm);
 }
 
 export function nodePositions(h) {
   const pos = {};
-  for (const n of h.nodes) pos[n.id] = cellToMm(n.cell, h.board.pitch_mm);
+  for (const n of h.nodes) pos[n.id] = nodePosition(n, h.board);
   return pos;
 }
 

@@ -1,0 +1,12 @@
+[
+ {
+  "file": "vw_movo.json",
+  "label": "VW ignition harness",
+  "note": "real KBL"
+ },
+ {
+  "file": "door.json",
+  "label": "Door harness",
+  "note": "fictitious, variants"
+ }
+]

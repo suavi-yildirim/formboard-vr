@@ -3,11 +3,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parseCell, cellToMm } from '../src/core/grid.js';
 import { validateHarness, variants, wiresForVariant, pegsFor, nodePositions, bundleSlots, wirePolyline } from '../src/core/harness.js';
-import { RoutingAttempt } from '../src/core/router.js';
+import { RoutingAttempt, neighbourMap } from '../src/core/router.js';
 import { Session, QA_ITEMS } from '../src/core/session.js';
 
-const h = JSON.parse(readFileSync(new URL('../src/data/harness.json', import.meta.url)));
+const load = (f) => JSON.parse(readFileSync(new URL(`../src/data/${f}`, import.meta.url)));
+const h = load('door.json');
+const vw = load('vw_movo.json');
 const pos = nodePositions(h);
+const nb = neighbourMap(h.segments);
 
 test('grid: cells map to centres in mm', () => {
   assert.deepEqual(parseCell('A1'), { col: 0, row: 0 });
@@ -17,6 +20,15 @@ test('grid: cells map to centres in mm', () => {
 
 test('harness: generated data is valid', () => {
   assert.deepEqual(validateHarness(h), []);
+  assert.deepEqual(validateHarness(vw), []);
+});
+
+test('vw: real KBL harness keeps segment lengths and routes every connection', () => {
+  assert.equal(vw.wires.length, 18);
+  assert.deepEqual(vw.skipped_connections, []);
+  assert.ok(vw.flattening.max_length_error_pct < 1);
+  assert.equal(variants(vw).length, 1);
+  assert.ok(vw.wires.every((w) => w.path.length >= 3));
 });
 
 test('harness: validation finds a broken path', () => {
@@ -64,18 +76,42 @@ test('router: grab only near the wire end', () => {
   assert.equal(r.holding, false);
 });
 
-test('router: wrong node counts once per entry, skipping counts too', () => {
-  const r = new RoutingAttempt(['X2', 'P2', 'N1', 'P4', 'N2'], pos);
+test('router: wrong branch counts once per entry, skipping counts too', () => {
+  const r = new RoutingAttempt(['X2', 'P2', 'N1', 'P4', 'N2'], pos, nb);
   r.update(at('X2'), true);
   r.update(at('P2'), true);
   r.update(at('N1'), true);
-  const e = r.update(at('P3'), true); // wrong branch
+  const e = r.update(at('P3'), true); // wrong branch at N1
   assert.equal(e[0].type, 'wrong');
   r.update(at('P3', 3), true); // still inside: no second error
   assert.equal(r.errors, 1);
   r.update(at('N2'), true); // skipped P4
   assert.equal(r.errors, 2);
   assert.equal(r.next, 'P4');
+});
+
+test('router: a correct move past a short side branch is not an error', () => {
+  const hub = { A: { x: 0, y: 0 }, B: { x: 100, y: 0 }, C: { x: 25, y: 15 } };
+  const r = new RoutingAttempt(['A', 'B'], hub, { A: ['B', 'C'], B: ['A'], C: ['A'] });
+  r.update(hub.A, true);
+  for (let x = 5; x <= 100; x += 5) r.update({ x, y: 0 }, true); // passes 15 mm from C
+  assert.equal(r.errors, 0);
+  assert.ok(r.done);
+  const q = new RoutingAttempt(['A', 'B'], hub, { A: ['B', 'C'], B: ['A'], C: ['A'] });
+  q.update(hub.A, true);
+  q.update({ x: 25, y: 22 }, true); // clearly off track, at the side branch
+  assert.equal(q.errors, 1);
+});
+
+test('router: unrelated nodes are ignored, the next node wins when both are in reach', () => {
+  const r = new RoutingAttempt(['X1', 'P1', 'X2'], pos, nb);
+  r.update(at('X1'), true);
+  assert.deepEqual(r.update(at('X5'), true), []); // far away, not a branch of X1
+  const crowded = { A: { x: 0, y: 0 }, B: { x: 20, y: 0 }, C: { x: 30, y: 0 } };
+  const q = new RoutingAttempt(['A', 'C'], crowded, { A: ['B', 'C'], B: ['A'], C: ['A'] });
+  q.update({ x: 0, y: 0 }, true);
+  assert.deepEqual(q.update({ x: 22, y: 0 }, true), [{ type: 'snap', at: 'C' }, { type: 'done' }]);
+  assert.equal(q.errors, 0);
 });
 
 test('router: release keeps progress, regrab at last node', () => {

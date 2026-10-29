@@ -4,17 +4,19 @@ import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { validateHarness, variants, wiresForVariant, nodePositions, bundleSlots, wirePolyline, nodeById, COLOURS, COLOUR_NAMES } from './core/harness.js';
 import { distance } from './core/grid.js';
-import { RoutingAttempt, GRAB_MM } from './core/router.js';
+import { RoutingAttempt, GRAB_MM, neighbourMap } from './core/router.js';
 import { Session, QA_ITEMS } from './core/session.js';
 import { buildWorkshop } from './scene/workshop.js';
 import { Board } from './scene/board.js';
 import { WireLayer } from './scene/wires.js';
 import { Panel } from './scene/panel.js';
 import { Sfx } from './scene/audio.js';
+import { VehicleView } from './scene/vehicle.js';
 import { Pointers } from './input/pointers.js';
 
-const harness = await (await fetch(new URL('./data/harness.json', import.meta.url))).json();
-const problems = validateHarness(harness);
+const dataUrl = (f) => new URL(`./data/${f}`, import.meta.url);
+const getJson = async (f) => (await fetch(dataUrl(f))).json();
+const catalogue = await getJson('harnesses.json');
 
 // --- renderer, scene, camera ---
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -31,25 +33,38 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
 controls.enableDamping = true;
 
-// Desktop view: frame the panel and the board together, whatever the window shape.
-const VIEW = { left: -1.6, right: 0.75, bottom: 0.75, top: 1.68, z: -0.55 };
+// Desktop views: frame the panel and the board together, or the vehicle harness.
+const VIEWS = {
+  board: { left: -1.6, right: 0.75, bottom: 0.75, top: 1.68, z: -0.55, y: 0.15 },
+  vehicle: { left: -2.4, right: 2.4, bottom: 0, top: 2.2, z: 0, y: 0, centre: new THREE.Vector3(2.5, 0.75, -0.9), from: new THREE.Vector3(-1, 0.45, 0.15) },
+};
+let view = 'board';
 function fitCamera() {
-  const cx = (VIEW.left + VIEW.right) / 2, cy = (VIEW.bottom + VIEW.top) / 2;
+  const v = VIEWS[view];
   const vfov = THREE.MathUtils.degToRad(camera.fov);
   const hfov = 2 * Math.atan(Math.tan(vfov / 2) * camera.aspect);
-  const d = Math.max((VIEW.right - VIEW.left) / 2 / Math.tan(hfov / 2), (VIEW.top - VIEW.bottom) / 2 / Math.tan(vfov / 2)) * 1.05;
-  camera.position.set(cx, cy + 0.15, VIEW.z + d);
-  controls.target.set(cx, cy, VIEW.z);
+  const d = Math.max((v.right - v.left) / 2 / Math.tan(hfov / 2), (v.top - v.bottom) / 2 / Math.tan(vfov / 2)) * 1.05;
+  if (view === 'board') {
+    const cx = (v.left + v.right) / 2, cy = (v.bottom + v.top) / 2;
+    camera.position.set(cx, cy + v.y, v.z + d);
+    controls.target.set(cx, cy, v.z);
+  } else {
+    camera.position.copy(v.centre).addScaledVector(v.from.clone().normalize(), d);
+    controls.target.copy(v.centre);
+  }
   controls.update();
 }
 fitCamera();
 
+const backButton = document.getElementById('back-to-board');
+function setView(v) {
+  view = v;
+  backButton.hidden = v === 'board';
+  fitCamera();
+}
+backButton.addEventListener('click', () => setView('board'));
+
 const { metal } = buildWorkshop(scene);
-const board = new Board(harness, metal);
-board.group.position.set(0, 1.2, -0.62);
-board.group.rotation.x = -0.35;
-scene.add(board.group);
-const wires = new WireLayer(board);
 const panel = new Panel();
 panel.mesh.position.set(-0.98, 1.3, -0.4);
 panel.mesh.rotation.y = 0.55;
@@ -58,21 +73,62 @@ scene.add(panel.mesh);
 const sfx = new Sfx();
 const pointers = new Pointers(renderer, scene, camera, renderer.domElement);
 
-// --- app state ---
-const pos = nodePositions(harness);
-const vlist = variants(harness);
-const session = new Session(harness);
-const ui = { variant: 0, mode: 'guided', status: '', statusKind: '', ghostUntil: 0, lastSecond: -1 };
+// The VW vehicle harness stands to the user's right, 1:1, with the engine end (rear of the Beetle,
+// where the ignition harness sits) towards the user.
+let vehicle = null;
+getJson('vw_vehicle.json').then((data) => {
+  vehicle = new VehicleView(data);
+  vehicle.group.position.set(2.5, vehicle.liftM, -0.9);
+  vehicle.group.rotation.y = -Math.PI / 2;
+  scene.add(vehicle.group);
+  vehicle.group.updateMatrixWorld(true);
+  vehicle.sign.lookAt(new THREE.Vector3(0, 1.4, 0));
+  refresh();
+});
+
+// --- harness-dependent state ---
+const H = { file: null, harness: null, pos: {}, nb: {}, vlist: [], problems: [], session: null, board: null, wires: null };
+const ui = { harnessIdx: 0, variant: 0, mode: 'guided', status: '', statusKind: '', ghostUntil: 0, lastSecond: -1, loading: false };
 let attempt = null;
 let owner = null; // pointer currently holding the wire
 let polylines = {};
 const now = () => performance.now();
-const connLabel = (cp) => `${cp}  ${nodeById(harness, cp.split('.')[0])?.label ?? ''}`;
+
+async function loadHarness(i) {
+  ui.loading = true;
+  refresh();
+  const h = await getJson(catalogue[i].file);
+  H.board?.dispose();
+  H.file = catalogue[i].file;
+  H.harness = h;
+  H.problems = validateHarness(h);
+  H.pos = nodePositions(h);
+  H.nb = neighbourMap(h.segments);
+  H.vlist = variants(h);
+  H.session = new Session(h);
+  H.board = new Board(h, metal);
+  H.board.group.position.set(0, 1.2, -0.62);
+  H.board.group.rotation.x = -0.35;
+  scene.add(H.board.group);
+  H.wires = new WireLayer(H.board);
+  ui.harnessIdx = i;
+  ui.variant = 0;
+  ui.loading = false;
+  attempt = null;
+  owner = null;
+  refresh();
+}
+
+const connLabel = (w, end) => {
+  const n = nodeById(H.harness, end === 'from' ? w.from_node : w.to_node);
+  return `${w[end]}  ${n?.label ?? ''}`;
+};
 
 function startRun() {
-  session.start(vlist[ui.variant], ui.mode, now());
+  const { session, board, wires } = H;
+  session.start(H.vlist[ui.variant], ui.mode, now());
   const slots = bundleSlots(session.wires);
-  polylines = Object.fromEntries(session.wires.map((w) => [w.id, wirePolyline(w, pos, slots)]));
+  polylines = Object.fromEntries(session.wires.map((w) => [w.id, wirePolyline(w, H.pos, slots)]));
   wires.clearDone();
   wires.clearLive();
   wires.clearGhost();
@@ -82,28 +138,29 @@ function startRun() {
   board.setHalos([]);
   attempt = null;
   ui.status = '';
+  setView('board');
   refresh();
 }
 
 function toMenu() {
-  session.restart();
+  H.session.restart();
   attempt = null;
   owner = null;
-  wires.clearLive();
-  wires.clearGhost();
-  wires.setHandle(null);
-  wires.dimDone(false);
-  board.setHalos([]);
+  H.wires.clearLive();
+  H.wires.clearGhost();
+  H.wires.setHandle(null);
+  H.wires.dimDone(false);
+  H.board.setHalos([]);
   refresh();
 }
 
 function enterWire() {
-  const w = session.wire;
-  attempt = new RoutingAttempt(w.path, pos);
+  const w = H.session.wire;
+  attempt = new RoutingAttempt(w.path, H.pos, H.nb);
   owner = null;
-  wires.dimDone(true);
-  wires.clearLive();
-  wires.setGhost(w, polylines[w.id]);
+  H.wires.dimDone(true);
+  H.wires.clearLive();
+  H.wires.setGhost(w, polylines[w.id]);
   ui.status = '';
   updateGuides();
   updateLive(null);
@@ -113,33 +170,34 @@ function enterWire() {
 function enterQa() {
   attempt = null;
   owner = null;
-  wires.dimDone(false);
-  wires.clearGhost();
-  wires.clearLive();
-  wires.setHandle(null);
-  const ends = new Set(session.wires.flatMap((w) => [w.path[0], w.path.at(-1)]));
-  board.setHalos([...ends], 0x3ddc84);
+  H.wires.dimDone(false);
+  H.wires.clearGhost();
+  H.wires.clearLive();
+  H.wires.setHandle(null);
+  const ends = new Set(H.session.wires.flatMap((w) => [w.path[0], w.path.at(-1)]));
+  H.board.setHalos([...ends], 0x3ddc84);
   refresh();
 }
 
 function updateGuides() {
-  if (session.state !== 'route' || !attempt) return;
-  const w = session.wire;
-  const guided = session.mode === 'guided' || now() < ui.ghostUntil;
+  if (H.session.state !== 'route' || !attempt) return;
+  const w = H.session.wire;
+  const guided = H.session.mode === 'guided' || now() < ui.ghostUntil;
   const target = w.path.at(-1);
   const ids = guided && attempt.next ? [...new Set([attempt.next, target])] : [target];
-  board.setHalos(ids, COLOURS[w.colour] === COLOURS.WH ? 0x5ce1ff : COLOURS[w.colour]);
-  wires.setGhostVisible(guided);
+  const c = COLOURS[w.colour];
+  H.board.setHalos(ids, c === COLOURS.WH || c === COLOURS.BK ? 0x5ce1ff : c);
+  H.wires.setGhostVisible(guided);
 }
 
 // Live wire = routed part (bundle-offset points) plus the free end at the pointer while held.
 function updateLive(pointerMm) {
-  const w = session.wire;
+  const w = H.session.wire;
   const routed = polylines[w.id].slice(0, attempt.reached);
   const pts = attempt.holding && pointerMm ? [...routed, pointerMm] : routed;
-  if (pts.length >= 2) wires.setLive(w, pts, false);
-  else wires.clearLive();
-  wires.setHandle(w, attempt.holding && pointerMm ? pointerMm : routed.at(-1), attempt.holding);
+  if (pts.length >= 2) H.wires.setLive(w, pts, false);
+  else H.wires.clearLive();
+  H.wires.setHandle(w, attempt.holding && pointerMm ? pointerMm : routed.at(-1), attempt.holding);
 }
 
 function handleEvents(events, p) {
@@ -147,22 +205,22 @@ function handleEvents(events, p) {
     if (e.type === 'grab') { sfx.grab(); p.pulse(0.3, 20); }
     if (e.type === 'snap') {
       sfx.snap(); p.pulse(0.6, 40);
-      board.flash(e.at, 0x3ddc84);
+      H.board.flash(e.at, 0x3ddc84);
       ui.status = `✓ ${e.at}`; ui.statusKind = 'ok';
       updateGuides();
     }
     if (e.type === 'wrong') {
       sfx.wrong(); p.pulse(1, 140);
-      board.flash(e.at, 0xff3b30);
-      ui.status = session.mode === 'guided' ? `✗ ${e.at} is wrong, next is ${e.expected}` : `✗ ${e.at} is not on this route`;
+      H.board.flash(e.at, 0xff3b30);
+      ui.status = H.session.mode === 'guided' ? `✗ ${e.at} is wrong, next is ${e.expected}` : `✗ ${e.at} is not on this route`;
       ui.statusKind = 'err';
     }
     if (e.type === 'done') {
       sfx.done();
-      const w = session.wire;
-      wires.setDone(w, polylines[w.id]);
-      session.wireDone(attempt.errors, now());
-      if (session.state === 'qa') enterQa();
+      const w = H.session.wire;
+      H.wires.setDone(w, polylines[w.id]);
+      H.session.wireDone(attempt.errors, now());
+      if (H.session.state === 'qa') enterQa();
       else enterWire();
       return;
     }
@@ -171,23 +229,25 @@ function handleEvents(events, p) {
 }
 
 function back() {
-  if (session.state !== 'qa' && !(session.state === 'route' && session.index > 0)) return;
-  session.back(now());
-  wires.removeDone(session.wire.id);
+  const s = H.session;
+  if (s.state !== 'qa' && !(s.state === 'route' && s.index > 0)) return;
+  s.back(now());
+  H.wires.removeDone(s.wire.id);
   enterWire();
 }
 
 function showMe() {
-  if (session.state !== 'route') return;
-  session.hint();
+  if (H.session.state !== 'route') return;
+  H.session.hint();
   ui.ghostUntil = now() + 3000;
-  wires.startTour();
+  H.wires.startTour();
   updateGuides();
   refresh();
 }
 
 function downloadLog() {
-  const blob = new Blob([JSON.stringify({ ...session.summary(), date: new Date().toISOString() }, null, 2)], { type: 'application/json' });
+  const log = { ...H.session.summary(), harness_file: H.file, date: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(log, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `formboard-log-${Date.now()}.json`;
@@ -197,34 +257,38 @@ function downloadLog() {
 
 function onButton(id) {
   sfx.click();
+  const s = H.session;
+  if (id.startsWith('harness:')) { const i = Number(id.split(':')[1]); if (i !== ui.harnessIdx) loadHarness(i); return; }
   if (id.startsWith('variant:')) ui.variant = Number(id.split(':')[1]);
   else if (id.startsWith('mode:')) ui.mode = id.split(':')[1];
   else if (id === 'start') startRun();
   else if (id === 'menu') toMenu();
-  else if (id === 'allpegs') { for (const p of session.pegs) board.setPeg(p.id, 'set'); session.setAllPegs(now()); enterWire(); return; }
+  else if (id === 'vehicle') { if (!renderer.xr.isPresenting) setView('vehicle'); }
+  else if (id === 'allpegs') { for (const p of s.pegs) H.board.setPeg(p.id, 'set'); s.setAllPegs(now()); enterWire(); return; }
   else if (id === 'showme') showMe();
   else if (id === 'back') back();
   else if (id.startsWith('qa:')) {
-    session.checkQa(Number(id.split(':')[1]), now());
-    if (session.state === 'summary') { sfx.finish(); board.setHalos([]); console.log('formboard log', session.summary()); }
+    s.checkQa(Number(id.split(':')[1]), now());
+    if (s.state === 'summary') { sfx.finish(); H.board.setHalos([]); console.log('formboard log', s.summary()); }
   } else if (id === 'download') downloadLog();
   else if (id === 'again') startRun();
   refresh();
 }
 
 function onBoardPress(p) {
-  if (session.state !== 'prep' || !p.boardMm) return;
+  const s = H.session;
+  if (s.state !== 'prep' || !p.boardMm) return;
   let best = null, bestD = GRAB_MM;
-  for (const peg of session.pegs) {
-    if (session.pegsSet.has(peg.id)) continue;
-    const d = distance(p.boardMm, pos[peg.id]);
+  for (const peg of s.pegs) {
+    if (s.pegsSet.has(peg.id)) continue;
+    const d = distance(p.boardMm, H.pos[peg.id]);
     if (d < bestD) { best = peg; bestD = d; }
   }
   if (!best) return;
-  board.setPeg(best.id, 'set');
+  H.board.setPeg(best.id, 'set');
   sfx.snap(); p.pulse(0.5, 30);
-  session.setPeg(best.id, now());
-  if (session.state === 'route') enterWire();
+  s.setPeg(best.id, now());
+  if (s.state === 'route') enterWire();
   else refresh();
 }
 
@@ -234,30 +298,37 @@ const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(
 
 function header(g, kicker, title) {
   g.text(kicker, L, 72, { size: 24, weight: 700, colour: '#5ce1ff' });
-  g.text(title, L, 124, { size: 42, weight: 700, max: R - L });
+  if (title) g.text(title, L, 124, { size: 40, weight: 700, max: R - L });
 }
 
 const views = {
   menu(g) {
-    header(g, 'FORMBOARD VR · WIRE HARNESS TRAINING', harness.description);
-    g.text(`${harness.id} · ${harness.wires.length} wires · source: KBL + formboard layout`, L, 166, { size: 24, colour: '#9aa7b8' });
-    if (problems.length) { g.para(`Harness data is invalid: ${problems.join('; ')}`, L, 230, R - L, { colour: '#ff6b6b' }); return; }
-    g.text('Variant', L, 228, { size: 26, weight: 600, colour: '#9aa7b8' });
-    vlist.forEach((v, i) => {
-      const n = wiresForVariant(harness, v).length;
-      g.button(`variant:${i}`, `${v.label} · ${n}`, L + (i % 2) * 464, 246 + Math.floor(i / 2) * 84, 448, 70, { selected: ui.variant === i, size: 26 });
+    const h = H.harness;
+    header(g, 'FORMBOARD VR · WIRE HARNESS TRAINING', h.description);
+    g.text(`${h.id} · ${h.wires.length} wires · ${h.source}`, L, 162, { size: 22, colour: '#9aa7b8', max: R - L });
+    if (H.problems.length) { g.para(`Harness data is invalid: ${H.problems.join('; ')}`, L, 230, R - L, { colour: '#ff6b6b' }); return; }
+    g.text('Harness', L, 212, { size: 24, weight: 600, colour: '#9aa7b8' });
+    catalogue.forEach((c, i) => g.button(`harness:${i}`, `${c.label} · ${c.note}`, L + i * 464, 226, 448, 62, { selected: ui.harnessIdx === i, size: 25 }));
+    g.text('Variant', L, 326, { size: 24, weight: 600, colour: '#9aa7b8' });
+    H.vlist.forEach((v, i) => {
+      const n = wiresForVariant(h, v).length;
+      g.button(`variant:${i}`, `${v.label} · ${n}`, L + (i % 2) * 464, 340 + Math.floor(i / 2) * 70, 448, 58, { selected: ui.variant === i, size: 24 });
     });
-    g.text('Mode', L, 452, { size: 26, weight: 600, colour: '#9aa7b8' });
-    g.button('mode:guided', 'Guided', L, 470, 448, 70, { selected: ui.mode === 'guided' });
-    g.button('mode:test', 'Test', L + 464, 470, 448, 70, { selected: ui.mode === 'test' });
-    g.para(ui.mode === 'guided' ? 'Path, next peg and target are shown. Learn the harness.' : 'Only the target connector is shown. Route from the drawing; errors and hints are logged.', L, 584, R - L, { size: 24, colour: '#c5ceda' });
-    g.button('start', 'Start', L, 620, R - L, 76, { primary: true, size: 32 });
+    if (h.flattening) {
+      g.para(`Flattened from 3D KBL: ${h.flattening.segments} segments at true length (max. deviation ${h.flattening.max_length_error_pct} %), pegs placed automatically.`, L, 440, R - L, { size: 20, colour: '#c5ceda' });
+    }
+    g.text('Mode', L, 514, { size: 24, weight: 600, colour: '#9aa7b8' });
+    g.button('mode:guided', 'Guided', L, 526, 448, 60, { selected: ui.mode === 'guided' });
+    g.button('mode:test', 'Test', L + 464, 526, 448, 60, { selected: ui.mode === 'test' });
+    g.button('start', ui.loading ? 'Loading…' : 'Start', L, 610, 600, 80, { primary: true, size: 32, disabled: ui.loading });
+    g.button('vehicle', renderer.xr.isPresenting ? 'Car: turn right →' : 'Vehicle view', L + 616, 610, 296, 80, { disabled: !vehicle, size: 26 });
   },
 
   prep(g) {
+    const s = H.session;
     header(g, 'STEP 1 · BOARD PREP', 'Set the guide pegs');
-    let y = g.para('Point at a blue ghost peg on the board and pinch (or pull the trigger) to insert it. Orange caps are Y-pegs at branch points.', L, 190, R - L);
-    const n = session.pegsSet.size, total = session.pegs.length;
+    const y = g.para('Point at a blue ghost peg on the board and pinch (or pull the trigger) to insert it. Orange caps are Y-pegs at branch points.', L, 190, R - L);
+    const n = s.pegsSet.size, total = s.pegs.length;
     g.text(`${n} / ${total} pegs`, L, y + 50, { size: 34, weight: 700 });
     g.bar(L, y + 74, R - L, 18, n / total);
     g.button('allpegs', 'Set all pegs', L, 620, 448, 76);
@@ -265,23 +336,25 @@ const views = {
   },
 
   route(g) {
-    const w = session.wire, i = session.index, n = session.wires.length;
-    header(g, `STEP 2 · WIRE ${i + 1} / ${n} · ${session.mode.toUpperCase()}`, '');
+    const s = H.session;
+    const w = s.wire, i = s.index, n = s.wires.length;
+    header(g, `STEP 2 · WIRE ${i + 1} / ${n} · ${s.mode.toUpperCase()}`, '');
     g.swatch(L + 22, 112, COLOURS[w.colour] ?? 0xcccccc, 22);
-    g.text(`${w.id}  ${COLOUR_NAMES[w.colour] ?? w.colour} · ${w.cross_section_mm2} mm²`, L + 60, 124, { size: 40, weight: 700 });
-    g.text(`Signal ${w.signal} · ${w.length_mm} mm`, L, 170, { size: 26, colour: '#9aa7b8' });
+    const colour = `${COLOUR_NAMES[w.colour] ?? w.colour}${w.stripe ? `/${COLOUR_NAMES[w.stripe] ?? w.stripe}` : ''}`;
+    g.text(`${w.id}  ${colour} · ${w.cross_section_mm2} mm²`, L + 60, 124, { size: 40, weight: 700, max: R - L - 60 });
+    g.text(`Signal ${w.signal} · ${w.length_mm} mm`, L, 170, { size: 26, colour: '#9aa7b8', max: R - L });
     g.text('From', L, 222, { size: 24, colour: '#9aa7b8' });
-    g.text(connLabel(w.from), L + 90, 222, { size: 28, weight: 600, max: R - L - 90 });
+    g.text(connLabel(w, 'from'), L + 90, 222, { size: 28, weight: 600, max: R - L - 90 });
     g.text('To', L, 264, { size: 24, colour: '#9aa7b8' });
-    g.text(connLabel(w.to), L + 90, 264, { size: 28, weight: 600, max: R - L - 90 });
+    g.text(connLabel(w, 'to'), L + 90, 264, { size: 28, weight: 600, max: R - L - 90 });
     const instr = attempt?.holding
-      ? (session.mode === 'guided' ? `Pull the wire to ${attempt.next}.` : 'Pull the wire along its route to the target connector.')
+      ? (s.mode === 'guided' ? `Pull the wire to ${attempt.next}.` : 'Pull the wire along its route to the target connector.')
       : attempt?.reached > 1
         ? `Grab the wire end at ${attempt.end} to continue.`
         : `Grab the glowing end at ${w.path[0]} and pull it through the pegs to ${w.path.at(-1)}.`;
     g.para(instr, L, 322, R - L, { size: 28 });
     if (ui.status) g.text(ui.status, L, 420, { size: 30, weight: 700, colour: ui.statusKind === 'err' ? '#ff6b6b' : '#3ddc84' });
-    const m = session.metrics[i];
+    const m = s.metrics[i];
     g.text(`Errors ${attempt?.errors ?? 0}    Hints ${m.hints}    Time ${fmt((now() - m.start) / 1000)}`, L, 478, { size: 28, colour: '#c5ceda' });
     g.text(`Peg ${attempt ? attempt.reached : 0} / ${w.path.length}`, R, 478, { size: 28, colour: '#c5ceda', align: 'right' });
     g.bar(L, 510, R - L, 14, attempt ? (attempt.reached - 1) / (w.path.length - 1) : 0, `#${(COLOURS[w.colour] ?? 0x5ce1ff).toString(16).padStart(6, '0')}`);
@@ -292,32 +365,40 @@ const views = {
   },
 
   qa(g) {
+    const s = H.session;
     header(g, 'STEP 3 · QUALITY CHECK', 'Check the harness');
     g.text('Connector ends are highlighted. Confirm each check.', L, 172, { size: 26, colour: '#c5ceda' });
-    QA_ITEMS.forEach((item, i) => g.button(`qa:${i}`, `${session.qa.has(i) ? '☑' : '☐'}  ${item}`, L, 210 + i * 92, R - L, 76, { selected: session.qa.has(i) }));
+    QA_ITEMS.forEach((item, i) => g.button(`qa:${i}`, `${s.qa.has(i) ? '☑' : '☐'}  ${item}`, L, 210 + i * 92, R - L, 76, { selected: s.qa.has(i) }));
     g.button('back', 'Back to last wire', L, 620, 448, 76);
     g.button('menu', 'Menu', L + 464, 620, 448, 76);
   },
 
   summary(g) {
-    const s = session.summary();
+    const s = H.session.summary();
     header(g, 'DONE · HARNESS COMPLETE', `${s.variant} · ${s.mode}`);
     g.text(`${fmt(s.total_s)} total`, L, 196, { size: 36, weight: 700 });
     g.text(`${s.errors} errors`, L + 330, 196, { size: 36, weight: 700, colour: s.errors ? '#ff6b6b' : '#3ddc84' });
     g.text(`${s.hints} hints`, L + 610, 196, { size: 36, weight: 700, colour: '#c5ceda' });
+    const cols = s.wires.length > 12 ? 3 : 2, per = Math.ceil(s.wires.length / cols), colW = (R - L) / cols;
+    const rowH = Math.min(54, 330 / per);
     s.wires.forEach((w, i) => {
-      const x = L + (i < 6 ? 0 : 464), y = 256 + (i % 6) * 54;
-      const wire = session.wires.find((x) => x.id === w.wire);
-      g.swatch(x + 14, y - 9, COLOURS[wire.colour] ?? 0xcccccc, 12);
-      g.text(`${w.wire}   ${w.time_s.toFixed(1)} s   ${w.errors} err`, x + 40, y, { size: 26, colour: w.errors ? '#ffb3b3' : '#e9eef5' });
+      const x = L + Math.floor(i / per) * colW, y = 256 + (i % per) * rowH;
+      const wire = H.session.wires.find((x) => x.id === w.wire);
+      g.swatch(x + 14, y - 9, COLOURS[wire.colour] ?? 0xcccccc, 11);
+      g.text(`${w.wire}  ${w.time_s.toFixed(1)} s  ${w.errors} err`, x + 36, y, { size: Math.min(26, rowH * 0.62), colour: w.errors ? '#ffb3b3' : '#e9eef5', max: colW - 44 });
     });
-    g.button('download', 'Download log', L, 620, 448, 76);
-    g.button('again', 'New run', L + 464, 620, 448, 76, { primary: true });
+    g.button('download', 'Download log', L, 620, 290, 76);
+    g.button('vehicle', renderer.xr.isPresenting ? 'Car: turn right →' : 'Vehicle view', L + 311, 620, 290, 76, { disabled: !vehicle });
+    g.button('again', 'New run', L + 622, 620, 290, 76, { primary: true });
   },
 };
 
 function refresh() {
-  panel.draw(views[session.state]);
+  if (!H.session) {
+    panel.draw((g) => header(g, 'FORMBOARD VR', 'Loading harness…'));
+    return;
+  }
+  panel.draw(views[H.session.state]);
 }
 
 // --- frame loop ---
@@ -331,22 +412,22 @@ function frame() {
   let hover = null;
   for (const p of pointers.update()) {
     const hp = p.raycaster.intersectObject(panel.mesh)[0];
-    const hb = p.raycaster.intersectObject(board.surface)[0];
+    const hb = H.board ? p.raycaster.intersectObject(H.board.surface)[0] : null;
     const panelFirst = hp && (!hb || hp.distance < hb.distance);
     p.panelId = panelFirst ? panel.hit(hp.uv) : null;
-    p.boardMm = !panelFirst && hb ? board.toMm(hb.point) : null;
+    p.boardMm = !panelFirst && hb ? H.board.toMm(hb.point) : null;
     p.setRayLength((panelFirst ? hp : hb)?.distance);
     if (p.panelId) hover = p.panelId;
     if (p.justPressed) {
       sfx.unlock();
       p.pressOnPanel = panelFirst;
       if (p.panelId) onButton(p.panelId);
-      else if (!panelFirst) onBoardPress(p);
+      else if (!panelFirst && H.session) onBoardPress(p);
     }
   }
   panel.setHover(hover);
 
-  if (session.state === 'route' && attempt) {
+  if (H.session?.state === 'route' && attempt) {
     if (!owner) {
       for (const p of pointers.list) {
         if (!p.enabled || !p.pressed || p.pressOnPanel) continue;
@@ -359,7 +440,7 @@ function frame() {
       if (!attempt.holding) owner = null;
       handleEvents(events, p);
     }
-    if (session.state === 'route' && attempt) {
+    if (H.session.state === 'route' && attempt) {
       updateLive(owner?.boardMm ?? null);
       if (ui.ghostUntil && now() > ui.ghostUntil) { ui.ghostUntil = 0; updateGuides(); }
       const sec = Math.floor(now() / 1000);
@@ -367,12 +448,15 @@ function frame() {
     }
   }
 
-  board.update(dt, t);
-  wires.update(dt, t);
+  H.board?.update(dt, t);
+  H.wires?.update(dt, t);
+  vehicle?.update(t);
   renderer.render(scene, camera);
 }
 
-refresh();
+renderer.xr.addEventListener('sessionstart', refresh);
+renderer.xr.addEventListener('sessionend', () => { refresh(); fitCamera(); });
+await loadHarness(0);
 renderer.setAnimationLoop(frame);
 
 window.addEventListener('resize', () => {
@@ -382,6 +466,5 @@ window.addEventListener('resize', () => {
   if (!renderer.xr.isPresenting) fitCamera();
 });
 
-// Handy for debugging in the browser console.
-// step() renders one frame by hand, for scripted tests when the page gets no animation frames.
-window.formboard = { session, harness, board, panel, camera, step: frame };
+// Debug handle. step() renders one frame by hand, for scripted tests when the page gets no animation frames.
+window.formboard = { H, panel, camera, step: frame, load: loadHarness, setView };

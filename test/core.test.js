@@ -70,6 +70,14 @@ test('router: correct route snaps each node and finishes', () => {
   assert.ok(r.done);
 });
 
+test('router: grabs at the drawn wire end (bundle offset), not at the node centre', () => {
+  const r = new RoutingAttempt(['X1', 'P1', 'X2'], pos);
+  const drawn = { x: pos.X1.x, y: pos.X1.y + 38 }; // outer wire of a bundle
+  assert.deepEqual(r.update({ x: drawn.x, y: drawn.y + 5 }, true, 30, drawn), [{ type: 'grab', at: 'X1' }]);
+  const q = new RoutingAttempt(['X1', 'P1', 'X2'], pos);
+  assert.deepEqual(q.update({ x: drawn.x, y: drawn.y + 5 }, true, 30), []); // old behaviour: missed
+});
+
 test('router: grab only near the wire end', () => {
   const r = new RoutingAttempt(['X1', 'P1', 'X2'], pos);
   assert.deepEqual(r.update(at('P1'), true), []);

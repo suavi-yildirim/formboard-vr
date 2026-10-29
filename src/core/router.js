@@ -47,7 +47,8 @@ export class RoutingAttempt {
 
   // grabMm: how close the pointer must be to the wire end to pick it up
   // (fingertips in VR are precise, a mouse ray on a tilted board less so).
-  update(p, pressed, grabMm = GRAB_MM) {
+  // grabAt: where the wire end is drawn, if not on the node centre (wires in a bundle lie side by side).
+  update(p, pressed, grabMm = GRAB_MM, grabAt = null) {
     const events = [];
     if (this.done) return events;
     if (!pressed) {
@@ -57,7 +58,7 @@ export class RoutingAttempt {
       return events;
     }
     if (!this.holding) {
-      if (p && distance(p, this.pos[this.end]) <= grabMm) {
+      if (p && distance(p, grabAt ?? this.pos[this.end]) <= grabMm) {
         this.holding = true;
         events.push({ type: 'grab', at: this.end });
       }

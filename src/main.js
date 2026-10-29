@@ -101,7 +101,7 @@ const carPanel = new Panel(0.4);
   carPanel.draw((g) => {
     g.text('VEHICLE VIEW · 1:1', 56, 80, { size: 30, weight: 700, colour: '#5ce1ff' });
     g.text('VW Old Beetle harness', 56, 150, { size: 52, weight: 700 });
-    g.para('Orange: the ignition harness from the formboard, in place at the engine. Point at the floor and pinch to walk around.', 56, 230, 912, { size: 34, colour: '#c5ceda' });
+    g.para('Orange: the ignition harness from the formboard, in place at the engine. Walk around, or hold a controller's grip button, aim at the floor and release to teleport.', 56, 230, 912, { size: 34, colour: '#c5ceda' });
     g.button('goto:board', '← Back to the formboard', 56, 560, 912, 110, { primary: true, size: 40 });
   });
 }
@@ -229,6 +229,11 @@ function updateGuides() {
   const c = COLOURS[w.colour];
   H.board.setHalos(ids, c === COLOURS.WH || c === COLOURS.BK ? 0x5ce1ff : c);
   H.wires.setGhostVisible(guided);
+}
+
+// Where the wire end is drawn (bundle-offset point), so it is grabbed exactly where it is seen.
+function grabPoint() {
+  return polylines[H.session.wire.id][attempt.reached - 1];
 }
 
 // Live wire = routed part (bundle-offset points) plus the free end while held: at the fingertips
@@ -471,10 +476,11 @@ function frame() {
       const inside = probe && probe.mm.x > -60 && probe.mm.y > -60 && probe.mm.x < H.board.size.w + 60 && probe.mm.y < H.board.size.h + 60;
       // Fingers easily sink into a virtual board (no resistance): accept up to 8 cm behind the surface.
       nearBoard = !!(inside && probe.z > -0.12 && probe.z < 0.2);
-      const touching = inside && probe.z > -0.08 && probe.z < 0.07;
+      const touching = inside && probe.z > -0.08 && probe.z < 0.07; // to pick up a wire end or set a peg
+      const guiding = inside && probe.z > -0.08 && probe.z < 0.12; // while pulling, the hand may lift a bit
       pointers.setTipVisible(p, nearBoard);
       p.work = {
-        mm: touching ? probe.mm : null, pressed: p.pinching,
+        mm: guiding ? probe.mm : null, pressed: p.pinching,
         // act only where the pinch closes (plus a short grace period), not by sweeping into a wire
         justPressed: touching && pointers.pinchFresh(p),
         canGrab: touching && pointers.pinchFresh(p),
@@ -498,27 +504,19 @@ function frame() {
       const pressed = p.pressed && !p.pressOnPanel;
       p.work = { mm, pressed, justPressed: p.justPressed && !panelFirst, canGrab: pressed, grab: GRAB_MM, freeEnd: null };
     }
-    // Teleport target: the floor, when the ray hits nothing else (VR only).
-    const floor = !mouse && !nearBoard && !hp && loco.active ? loco.floorHit(p.raycaster.ray) : null;
+    // Teleport: hold the controller's grip button, aim at the floor, release. Never by pinching.
+    const floor = !mouse && p.squeezing && loco.active ? loco.floorHit(p.raycaster.ray) : null;
+    if (p.squeezing) { if (floor) p.floorTarget = floor; marker = p.floorTarget ?? null; }
+    else if (p.floorTarget) { loco.teleport(p.floorTarget); sfx.grab(); p.floorTarget = null; }
     p.setRayLength(hp ? hp.distance : floor ? floor.distanceTo(p.raycaster.ray.origin) : undefined);
-    if (!mouse) pointers.setRayVisible(p, !!(hp || (floor && !p.pinching) || p.pressOnFloor));
+    if (!mouse) pointers.setRayVisible(p, !!(hp || p.squeezing));
     if (p.panelId) hover.set(hitPanel, p.panelId);
     if (p.justPressed && !nearBoard) {
       sfx.unlock();
       p.pressOnPanel = panelFirst;
-      p.pressOnFloor = !!floor;
-      p.floorTarget = floor; // a pinch shorter than one frame still teleports
       if (p.panelId) onButton(p.panelId);
     }
     if (p.work.justPressed && H.session) { sfx.unlock(); onBoardPress(p); }
-    if (p.pressOnFloor) {
-      if (p.pressed) { if (floor) p.floorTarget = floor; marker = p.floorTarget ?? null; }
-      else {
-        if (p.floorTarget) { loco.teleport(p.floorTarget); sfx.grab(); }
-        p.pressOnFloor = false;
-        p.floorTarget = null;
-      }
-    }
   }
   for (const [x, id] of hover) x.setHover(id);
   loco.showMarker(marker);
@@ -527,13 +525,16 @@ function frame() {
   if (H.session?.state === 'route' && attempt) {
     if (!owner) {
       for (const p of pointers.list) {
-        if (!p.enabled || !p.work?.canGrab || p.pressOnPanel || p.pressOnFloor) continue;
-        handleEvents(attempt.update(p.work.mm, true, p.work.grab), p);
+        if (!p.enabled || !p.work?.canGrab || p.pressOnPanel) continue;
+        handleEvents(attempt.update(p.work.mm, true, p.work.grab, grabPoint()), p);
         if (attempt?.holding) { owner = p; p.pinchUsed = true; break; }
       }
     } else {
       const p = owner;
-      const events = attempt.update(p.enabled ? p.work.mm : null, p.enabled && p.work.pressed, p.work.grab);
+      // A short tracking dropout keeps the wire in hand; a longer one drops it at the last peg.
+      if (p.enabled) p.lostAt = null; else p.lostAt ??= now();
+      const holding = p.enabled ? p.work.pressed : now() - p.lostAt < 300;
+      const events = attempt.update(p.enabled ? p.work.mm : null, holding, p.work.grab);
       if (!attempt.holding) owner = null;
       handleEvents(events, p);
     }

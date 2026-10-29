@@ -13,6 +13,7 @@ const PINCH_ON = 0.03; // thumb-index distance (m) that starts a pinch
 const PINCH_OFF = 0.05; // and that ends it (hysteresis against flicker)
 const CONTROLLER_TIP = 0.03; // tip point ahead of the controller's ray origin
 const PINCH_GRACE_MS = 350;
+const PINCH_HOLD_MS = 150; // a pinch survives tracking dropouts this short (no dropped wires)
 
 class Pointer {
   constructor(id) {
@@ -71,6 +72,9 @@ export class Pointers {
       controller.addEventListener('disconnected', () => { p.inputSource = null; p.active = false; p.pressed = false; });
       controller.addEventListener('selectstart', () => p.press());
       controller.addEventListener('selectend', () => { p.pressed = false; });
+      // Grip button (inside of the controller): teleport. Hands never squeeze, so no accidental jumps.
+      controller.addEventListener('squeezestart', () => { if (!p.inputSource?.hand) p.squeezing = true; });
+      controller.addEventListener('squeezeend', () => { p.squeezing = false; });
       scene.add(controller);
 
       const grip = renderer.xr.getControllerGrip(i);
@@ -142,11 +146,11 @@ export class Pointers {
         const gap = a.distanceTo(b);
         p.tip = a.add(b).multiplyScalar(0.5);
         p.gapPinch = p.gapPinch ? gap < PINCH_OFF : gap < PINCH_ON;
-        p.pinching = p.pressed || p.gapPinch;
+        p.pinching = this.debounce(p, p.pressed || p.gapPinch);
       } else {
         // joints not tracked this frame: fall back to the hand's ray origin and the system pinch
         p.tip = p.raycaster.ray.origin.clone();
-        p.pinching = p.pressed;
+        p.pinching = this.debounce(p, p.pressed);
       }
     } else if (p.enabled) {
       p.tip = p.raycaster.ray.origin.clone().addScaledVector(p.raycaster.ray.direction, CONTROLLER_TIP);
@@ -154,6 +158,12 @@ export class Pointers {
     } else p.pinching = false;
     p.justPinched = p.pinching && !was;
     if (p.justPinched) { p.pinchStartedAt = performance.now(); p.pinchUsed = false; }
+  }
+
+  debounce(p, raw) {
+    const t = performance.now();
+    if (raw) p.pinchSeenAt = t;
+    return raw || (p.pinching && t - (p.pinchSeenAt ?? 0) < PINCH_HOLD_MS);
   }
 
   // A pinch may act during a short grace period after it closes (fingers settling onto the

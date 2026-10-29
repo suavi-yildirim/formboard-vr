@@ -6,7 +6,7 @@ VR training for wire-harness assembly on a formboard. It runs in the browser on 
 - **On Quest 3:** open the link in the Quest Browser and press *Enter VR*.
   - **Wires and pegs by hand:** pinch the glowing wire end between thumb and index finger, right at the wire (within 3 cm), and pull it through the pegs. The wire end stays at your fingertips. With controllers, the trigger grips at the controller tip.
   - **Buttons:** point at the panel and pinch.
-  - **Moving:** point at the floor, pinch and release to teleport. *Go to car* and *Back to the formboard* jump you there. With controllers, the left stick walks freely (relative to where you look) and the right stick turns in 30° steps.
+  - **Moving:** walk, or use *Go to car* and *Back to the formboard* to jump. With controllers: hold the grip button (inside of the controller), aim at the floor and release to teleport; the left stick walks freely (relative to where you look) and the right stick turns in 30° steps. Pinching never teleports, so working with your hands cannot move you by accident.
 - **On desktop:** left-click the panel and drag wires on the board. Right-drag to look around, Shift + right-drag or the arrow keys to pan, scroll to zoom. Desktop browsers have no WebXR, so the app runs there without the VR button.
 
 ## What it does
@@ -15,7 +15,7 @@ VR training for wire-harness assembly on a formboard. It runs in the browser on 
    - The **VW ignition harness** is real KBL data from the public VW "Old Beetle" sample: 18 wires, 20 connectors, flattened from the 3D vehicle geometry onto a 1:1 formboard.
    - The **door harness** is a fictitious example with variants that come from the KBL modules (base equipment, comfort, ambient light, full).
 2. **Board prep.** Ghost pegs show where the guide pegs and Y-pegs go, and you set each one.
-3. **Routing, one wire at a time.** Pinch the glowing wire end at the start connector and pull it along the board. In VR this is direct touch at the fingertips; rays are only used for the panel and for teleporting.
+3. **Routing, one wire at a time.** Pinch the glowing wire end at the start connector and pull it along the board. In VR this is direct touch at the fingertips, exactly at the glowing end; rays are only used for the panel and for teleporting.
    - The wire snaps to the next correct peg, with sound and haptic feedback.
    - A wrong branch or a skipped peg flashes red and counts as an error. Passing near other pegs while staying on track does not.
    - Reaching the target connector completes the wire, and earlier wires fade back.

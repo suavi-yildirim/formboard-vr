@@ -2,7 +2,12 @@
 
 **Wire harness assembly training in VR, driven by KBL data.** A real VW harness from its KBL file is flattened 1:1 onto a virtual formboard. You route it wire by wire with your bare hands, and every peg is checked. At the end you see the finished formboard, and where the harness sits in the car. It runs in the browser on Meta Quest 3 (WebXR), with no install.
 
-**[Try it](https://suavi-yildirim.github.io/formboard-vr/)** · **[Demo videos with sound](https://suavi-yildirim.github.io/formboard-vr/demo/)** · English and German (EN | DE switch in the app and on the demo page)
+<p align="center">
+  <a href="https://suavi-yildirim.github.io/formboard-vr/"><b>▶ Try it in the browser</b></a> &nbsp;·&nbsp;
+  <a href="https://suavi-yildirim.github.io/formboard-vr/demo/"><b>🎬 Demo videos with sound</b></a>
+</p>
+
+<p align="center">English and German: EN | DE switch in the app and on the demo page</p>
 
 <table>
   <tr>

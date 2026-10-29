@@ -246,12 +246,12 @@ function grabPoint() {
   return polylines[H.session.wire.id][attempt.reached - 1];
 }
 
-// --- the held wire, as a worker holds it: from the last peg to the hand under light tension (a
-// slight sag), the rest of the wire beyond the hand (a short tail, as if coiled in the hand).
+// --- the held wire grows as it is routed: it reaches from the last peg to the fingers under
+// light tension (a slight sag) and no further; the unrouted rest is not shown. It cannot be
+// pulled further than the wire really is long (then it is taut and its end stops short).
 // The shape is computed fresh every frame (core/heldwire.js), so it cannot fold or jitter.
-// The total is as long as the wire really is.
 const SLACK = 1.02; // span length relative to the straight distance: light tension
-const TAIL_M = 0.15;
+const TAIL_M = 0; // no hanging remainder beyond the hand
 let held = null; // { hand, taut, result } while a wire is held
 const HANDLING_MM = 60; // extra length for handling (terminals, crimp ends)
 const polyLen = (pts) => pts.slice(1).reduce((sum, q, i) => sum + distance(pts[i], q), 0);

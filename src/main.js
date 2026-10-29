@@ -25,13 +25,19 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.xr.enabled = true;
 renderer.xr.setFoveation?.(0.5);
 document.body.appendChild(renderer.domElement);
-document.body.appendChild(VRButton.createButton(renderer));
+// Without immersive VR support (desktop browsers, Safari) show a plain note instead of the
+// "WEBXR NOT AVAILABLE" / "VR NOT SUPPORTED" button.
+const vrSupported = await navigator.xr?.isSessionSupported?.('immersive-vr').catch(() => false);
+if (vrSupported) document.body.appendChild(VRButton.createButton(renderer));
+else document.getElementById('vr-note').hidden = false;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 50);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
 controls.enableDamping = true;
+controls.keyPanSpeed = 40;
+controls.listenToKeyEvents(window); // arrow keys pan
 
 // Desktop views: frame the panel and the board together, or the vehicle harness.
 const VIEWS = {

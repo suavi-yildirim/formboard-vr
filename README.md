@@ -4,7 +4,7 @@ VR training for wire-harness assembly on a formboard. It runs in the browser on 
 
 **Try it:** https://suavi-yildirim.github.io/formboard-vr/
 - **On Quest 3:** open the link in the Quest Browser, press *Enter VR*, then point and pinch (hand tracking) or pull the trigger.
-- **On desktop:** left-click the panel and drag wires on the board. Right-drag to look around, scroll to zoom.
+- **On desktop:** left-click the panel and drag wires on the board. Right-drag to look around, Shift + right-drag or the arrow keys to pan, scroll to zoom. Desktop browsers have no WebXR, so the app runs there without the VR button.
 
 ## What it does
 

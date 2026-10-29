@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://suavi-yildirim.github.io/formboard-vr/"><b>▶ Try it in the browser</b></a> &nbsp;·&nbsp;
-  <a href="https://suavi-yildirim.github.io/formboard-vr/demo/"><b>🎬 Demo videos with sound</b></a>
+  <a href="https://suavi-yildirim.github.io/formboard-vr/demo/"><b>🎬 VR Demo videos with sound</b></a>
 </p>
 
 <p align="center">English and German: EN | DE switch in the app and on the demo page</p>

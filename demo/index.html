@@ -10,7 +10,11 @@
     * { box-sizing: border-box; }
     html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, sans-serif; }
     main { max-width: 1440px; margin: 0 auto; padding: 32px 16px 48px; }
+    .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
     .kicker { color: var(--accent); font-weight: 700; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; }
+    .lang { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; flex-shrink: 0; }
+    .lang button { border: 0; background: transparent; color: var(--muted); font: 700 13px system-ui, sans-serif; padding: 6px 12px; cursor: pointer; }
+    .lang button[aria-pressed="true"] { background: var(--accent); color: #0d1117; }
     h1 { margin: 6px 0 8px; font-size: clamp(26px, 4vw, 40px); line-height: 1.15; }
     .lead { color: var(--muted); max-width: 820px; margin: 0 0 20px; }
     .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 28px; }
@@ -39,58 +43,116 @@
 </head>
 <body>
 <main>
-  <div class="kicker">Formboard VR · recorded on Meta Quest 3</div>
-  <h1>Wire harness assembly training in VR, driven by KBL data</h1>
-  <p class="lead">A real VW harness from its KBL file, flattened 1:1 onto a virtual formboard. You route it wire by wire with your bare hands, and every peg is checked. At the end you see the finished formboard, and where the harness sits in the car.</p>
+  <div class="top">
+    <div class="kicker" data-i18n="kicker">Formboard VR · recorded on Meta Quest 3</div>
+    <div class="lang" role="group" aria-label="Language">
+      <button data-lang="en" aria-pressed="true">EN</button><button data-lang="de" aria-pressed="false">DE</button>
+    </div>
+  </div>
+  <h1 data-i18n="title">Wire harness assembly training in VR, driven by KBL data</h1>
+  <p class="lead" data-i18n="lead">A real VW harness from its KBL file, flattened 1:1 onto a virtual formboard. You route it wire by wire with your bare hands, and every peg is checked. At the end you see the finished formboard, and where the harness sits in the car.</p>
   <div class="actions">
-    <a class="btn primary" href="../">Try it in the browser or on Quest 3</a>
-    <a class="btn ghost" href="https://github.com/suavi-yildirim/formboard-vr">Source on GitHub</a>
+    <a class="btn primary" href="../" data-i18n="try">Try it in the browser or on Quest 3</a>
+    <a class="btn ghost" href="https://github.com/suavi-yildirim/formboard-vr" data-i18n="source">Source on GitHub</a>
   </div>
 
   <div class="grid">
     <article class="card">
       <div class="video">
         <video src="media/wiring.mp4" poster="media/wiring.jpg" autoplay muted loop playsinline preload="auto"></video>
-        <div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full" aria-label="Fullscreen">⛶ Fullscreen</button></div>
+        <div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full">⛶ Fullscreen</button></div>
       </div>
       <div class="body">
-        <h2>Wiring by hand</h2>
-        <p>Pinch the wire end and pull it along the pegs. The wire grows to your fingertips, and each correct peg snaps green with a click.</p>
+        <h2 data-i18n="wiringTitle">Wiring by hand</h2>
+        <p data-i18n="wiringText">Pinch the wire end and pull it along the pegs. The wire grows to your fingertips, and each correct peg snaps green with a click.</p>
       </div>
     </article>
 
     <article class="card">
       <div class="video">
         <video src="media/formboard.mp4" poster="media/formboard.jpg" autoplay muted loop playsinline preload="auto"></video>
-        <div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full" aria-label="Fullscreen">⛶ Fullscreen</button></div>
+        <div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full">⛶ Fullscreen</button></div>
       </div>
       <div class="body">
-        <h2>Finished formboard</h2>
-        <p>The whole run: the menu (harness, variant, mode), setting the guide pegs, <i>Show me</i> drawing the route, a wrong peg flashing red, the last wire, the quality check, and the summary with time, errors and hints per wire.</p>
+        <h2 data-i18n="boardTitle">Finished formboard</h2>
+        <p data-i18n="boardText">The whole run: the menu (harness, variant, mode), setting the guide pegs, <i>Show me</i> drawing the route, a wrong peg flashing red, the last wire, the quality check, and the summary with time, errors and hints per wire.</p>
       </div>
     </article>
 
     <article class="card">
       <div class="video">
         <video src="media/car.mp4" poster="media/car.jpg" autoplay muted loop playsinline preload="auto"></video>
-        <div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full" aria-label="Fullscreen">⛶ Fullscreen</button></div>
+        <div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full">⛶ Fullscreen</button></div>
       </div>
       <div class="body">
-        <h2>Real KBL data from an example car</h2>
-        <p>The public VW Old Beetle harness from its KBL file, at 1:1: 183 segments from the KBL centre lines. Orange is the engine-compartment ignition harness that gets built on the formboard, shown where it sits in the car.</p>
+        <h2 data-i18n="carTitle">Real KBL data from an example car</h2>
+        <p data-i18n="carText">The public VW Old Beetle harness from its KBL file, at 1:1: 183 segments from the KBL centre lines. Orange is the engine-compartment ignition harness that gets built on the formboard, shown where it sits in the car.</p>
       </div>
     </article>
   </div>
 
   <div class="facts">
-    <div class="fact"><b>From KBL to formboard</b>Wire paths from the KBL routing; flattening keeps segment lengths true (KBL wire lengths match the board paths to the millimetre).</div>
-    <div class="fact"><b>Checked step by step</b>Snap on the right peg, error on a wrong branch or a skipped peg; time, errors and hints are logged per wire.</div>
-    <div class="fact"><b>No install</b>WebXR in the Quest browser: open the link, press Enter VR. Hand tracking or controllers.</div>
+    <div class="fact" data-i18n="fact1"><b>From KBL to formboard</b>Wire paths from the KBL routing; flattening keeps segment lengths true (KBL wire lengths match the board paths to the millimetre).</div>
+    <div class="fact" data-i18n="fact2"><b>Checked step by step</b>Snap on the right peg, error on a wrong branch or a skipped peg; time, errors and hints are logged per wire.</div>
+    <div class="fact" data-i18n="fact3"><b>No install</b>WebXR in the Quest browser: open the link, press Enter VR. Hand tracking or controllers.</div>
   </div>
 
-  <footer>Recorded in the headset; app sounds as played. Harness data: VW VOBES "Old Beetle" sample from the <a href="https://ecad-wiki.prostep.org/sample/2018-12-27-volkswagen-vobesng-old-beetle/">prostep ivip ECAD wiki</a>, CC BY-SA 4.0.</footer>
+  <footer data-i18n="footer">Recorded in the headset; app sounds as played. Harness data: VW VOBES "Old Beetle" sample from the <a href="https://ecad-wiki.prostep.org/sample/2018-12-27-volkswagen-vobesng-old-beetle/">prostep ivip ECAD wiki</a>, CC BY-SA 4.0.</footer>
 </main>
 <script>
+  // --- languages: English is in the HTML, German below. The choice comes from the link (#de / #en),
+  // then from the last visit, then from the browser language.
+  const ECAD = 'https://ecad-wiki.prostep.org/sample/2018-12-27-volkswagen-vobesng-old-beetle/';
+  const DE = {
+    pageTitle: 'Formboard VR – Demo',
+    description: 'Kabelbaummontage-Training in VR auf der Meta Quest 3, im Headset aufgenommen.',
+    kicker: 'Formboard VR · aufgenommen mit Meta Quest 3',
+    title: 'Kabelbaummontage-Training in VR, gesteuert durch KBL-Daten',
+    lead: 'Ein echter VW-Leitungssatz aus seiner KBL-Datei, 1:1 auf ein virtuelles Formbrett abgewickelt. Sie verlegen ihn Leitung für Leitung mit bloßen Händen, und jeder Stift wird geprüft. Am Ende sehen Sie das fertige Formbrett und wo der Leitungssatz im Fahrzeug sitzt.',
+    try: 'Im Browser oder auf der Quest 3 ausprobieren',
+    source: 'Quellcode auf GitHub',
+    wiringTitle: 'Verlegen von Hand',
+    wiringText: 'Leitungsende mit den Fingern greifen und an den Stiften entlang ziehen. Die Leitung wächst bis zu den Fingerspitzen, und jeder richtige Stift rastet grün mit einem Klick ein.',
+    boardTitle: 'Fertiges Formbrett',
+    boardText: 'Der ganze Ablauf: das Menü (Leitungssatz, Variante, Modus), das Setzen der Führungsstifte, <i>Show me</i> zeigt den Verlauf, ein falscher Stift blinkt rot, die letzte Leitung, die Qualitätsprüfung und die Auswertung mit Zeit, Fehlern und Hinweisen je Leitung.',
+    carTitle: 'Echte KBL-Daten aus einem Beispielfahrzeug',
+    carText: 'Der öffentliche VW-Leitungssatz „Old Beetle“ aus seiner KBL-Datei im Maßstab 1:1: 183 Segmente aus den KBL-Mittellinien. Orange ist der Zündungsleitungssatz im Motorraum, der auf dem Formbrett gebaut wird, an seiner Einbaulage im Fahrzeug.',
+    fact1: '<b>Von der KBL zum Formbrett</b>Leitungswege aus dem KBL-Routing; die Abwicklung erhält die Segmentlängen (die KBL-Leitungslängen stimmen millimetergenau mit den Wegen auf dem Brett überein).',
+    fact2: '<b>Schritt für Schritt geprüft</b>Einrasten am richtigen Stift, Fehler bei falscher Abzweigung oder übersprungenem Stift; Zeit, Fehler und Hinweise werden je Leitung protokolliert.',
+    fact3: '<b>Keine Installation</b>WebXR im Quest-Browser: Link öffnen, Enter VR drücken. Handtracking oder Controller.',
+    footer: `Im Headset aufgenommen; App-Töne wie abgespielt. Leitungssatzdaten: VW-VOBES-Beispiel „Old Beetle“ aus dem <a href="${ECAD}">prostep ivip ECAD-Wiki</a>, CC BY-SA 4.0.`,
+    soundOff: 'Ton aus', soundOn: 'Ton an', fullscreen: '⛶ Vollbild', langGroup: 'Sprache',
+  };
+  const EN = { soundOff: 'Sound off', soundOn: 'Sound on', fullscreen: '⛶ Fullscreen', langGroup: 'Language',
+               pageTitle: document.title, description: document.querySelector('meta[name=description]').content };
+  for (const el of document.querySelectorAll('[data-i18n]')) EN[el.dataset.i18n] = el.innerHTML;
+
+  let lang = 'en';
+  const t = (key) => (lang === 'de' ? DE : EN)[key];
+
+  function setLang(l, remember = true) {
+    lang = l === 'de' ? 'de' : 'en';
+    document.documentElement.lang = lang;
+    document.title = t('pageTitle');
+    document.querySelector('meta[name=description]').content = t('description');
+    for (const el of document.querySelectorAll('[data-i18n]')) el.innerHTML = t(el.dataset.i18n);
+    for (const b of document.querySelectorAll('.sound')) b.textContent = t(b.getAttribute('aria-pressed') === 'true' ? 'soundOn' : 'soundOff');
+    for (const b of document.querySelectorAll('.full')) b.textContent = t('fullscreen');
+    for (const b of document.querySelectorAll('.lang button')) b.setAttribute('aria-pressed', String(b.dataset.lang === lang));
+    document.querySelector('.lang').setAttribute('aria-label', t('langGroup'));
+    if (remember) {
+      try { localStorage.setItem('formboard-demo-lang', lang); } catch {}
+      history.replaceState(null, '', '#' + lang);
+    }
+  }
+  for (const b of document.querySelectorAll('.lang button')) b.addEventListener('click', () => setLang(b.dataset.lang));
+  let initial = (location.hash.slice(1) || '').toLowerCase();
+  if (initial !== 'de' && initial !== 'en') {
+    try { initial = localStorage.getItem('formboard-demo-lang') || ''; } catch { initial = ''; }
+  }
+  if (initial !== 'de' && initial !== 'en') initial = (navigator.language || '').toLowerCase().startsWith('de') ? 'de' : 'en';
+  setLang(initial, false);
+
   // Fullscreen per video (iPhone Safari only supports fullscreen on the video element itself).
   for (const card of document.querySelectorAll('.video')) {
     const video = card.querySelector('video');
@@ -112,11 +174,11 @@
       const on = video.muted;
       for (const other of cards) {
         const v = other.querySelector('video'), b = other.querySelector('.sound');
-        v.muted = true; b.setAttribute('aria-pressed', 'false'); b.textContent = 'Sound off';
+        v.muted = true; b.setAttribute('aria-pressed', 'false'); b.textContent = t('soundOff');
       }
       if (on) {
         video.muted = false; video.currentTime = 0; video.play();
-        btn.setAttribute('aria-pressed', 'true'); btn.textContent = 'Sound on';
+        btn.setAttribute('aria-pressed', 'true'); btn.textContent = t('soundOn');
       }
     });
   }

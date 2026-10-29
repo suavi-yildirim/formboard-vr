@@ -4,7 +4,7 @@ VR training for wire-harness assembly on a formboard. It runs in the browser on 
 
 **Try it:** https://suavi-yildirim.github.io/formboard-vr/
 
-**Watch it (recorded on Quest 3):** https://suavi-yildirim.github.io/formboard-vr/demo/
+**Watch it (recorded on Quest 3):** https://suavi-yildirim.github.io/formboard-vr/demo/ (English) · https://suavi-yildirim.github.io/formboard-vr/demo/#de (Deutsch)
 - **On Quest 3:** open the link in the Quest Browser and press *Enter VR*.
   - **Wires and pegs by hand:** pinch the glowing wire end between thumb and index finger, right at the wire (within 3 cm), and pull it through the pegs. The wire end stays at your fingertips. With controllers, the trigger grips at the controller tip.
   - **Buttons:** point at the panel and pinch.

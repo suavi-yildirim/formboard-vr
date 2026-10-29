@@ -19,7 +19,7 @@ VR training for wire-harness assembly on a formboard. It runs in the browser on 
    - The wire snaps to the next correct peg, with sound and haptic feedback.
    - A wrong branch or a skipped peg flashes red and counts as an error. Passing near other pegs while staying on track does not.
    - Reaching the target connector completes the wire, and earlier wires fade back.
-   - **The wire behaves like a wire.** The free part between the last peg and your hand is a small rope simulation: it sags under gravity, lies on the board, and hangs over its edge. It is exactly as long as the wire really is, taken from the KBL file. For the VW harness the KBL lengths equal the flattened board paths, to the millimetre. Pull further than the wire reaches and it goes taut: the end stops short of your hand, and a controller gives a short buzz.
+   - **The wire behaves like a wire,** held the way a worker holds it. From the last peg to your hand it runs under light tension, with a slight sag. The rest of the wire hangs beyond your hand (shown as a short tail, as if coiled in the hand), so it never spreads across the board. Both parts are a small rope simulation that rests on the board. The total is exactly as long as the wire really is, taken from the KBL file. For the VW harness the KBL lengths equal the flattened board paths, to the millimetre. Pull further than the wire reaches and it goes taut: the end stops short of your hand, and a controller gives a short buzz.
 4. **Two modes.**
    - **Guided** shows the path and the next peg.
    - **Test** shows only the target connector, so you route from the board drawing. Hints ("Show me") are counted.

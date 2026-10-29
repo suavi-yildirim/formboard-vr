@@ -35,3 +35,11 @@ test('rope: the board surface holds the wire up, off the board it hangs down', (
   const r2 = settle(off, { start: { x: 0.45, y: 0, z: 0.03 }, hand: { x: 0.6, y: 0, z: 0.03 }, length: 0.4, gravity: g, floorZ: 0.01, bounds: { w: 1, h: 1 } });
   assert.ok(Math.min(...r2.points.map((q) => q.z)) < -0.05, 'hangs past the edge');
 });
+
+test('rope: a free end hangs straight down from its start', () => {
+  const rope = new Rope(8);
+  const start = { x: 0, y: 0, z: 0.5 };
+  const r = settle(rope, { start, hand: null, length: 0.15, gravity: { x: 0, y: 0, z: -9.81 }, floorZ: -10 });
+  assert.equal(r.taut, false);
+  assert.ok(Math.abs(r.end.x) < 0.005 && Math.abs(r.end.z - 0.35) < 0.01, `end ${JSON.stringify(r.end)}`);
+});

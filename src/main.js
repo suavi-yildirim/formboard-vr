@@ -246,8 +246,13 @@ function grabPoint() {
   return polylines[H.session.wire.id][attempt.reached - 1];
 }
 
-// --- the held wire: a rope from the last peg to the hand, as long as the wire really is ---
+// --- the held wire, as a worker holds it: from the last peg to the hand under light tension (a
+// slight sag), the rest of the wire beyond the hand, hanging down (shown up to TAIL_M, as if the
+// rest were coiled in the hand). The total is as long as the wire really is.
 const rope = new Rope(16);
+const tail = new Rope(8);
+const SAG = 1.02; // span length relative to the straight distance: light tension
+const TAIL_M = 0.15;
 let held = null; // { hand, taut, result } while a wire is held
 const HANDLING_MM = 60; // extra length for handling (terminals, crimp ends)
 const polyLen = (pts) => pts.slice(1).reduce((sum, q, i) => sum + distance(pts[i], q), 0);
@@ -268,7 +273,8 @@ function grabRope(p) {
   const start = H.board.local(grabPoint(), WIRE_Z);
   const hand = handLocal(p) ?? start;
   rope.reset(start, hand);
-  held = { hand, taut: false, result: null };
+  tail.p = [];
+  held = { hand, taut: false, result: null, tail: null };
 }
 
 // Advance the rope; returns where the wire end is on the board (mm), or null when lifted away.
@@ -276,13 +282,19 @@ function stepRope(p, dt) {
   const w = H.session.wire;
   const start = H.board.local(grabPoint(), WIRE_Z);
   held.hand = handLocal(p) ?? held.hand;
-  const length = Math.max(0.02, (wireLengthMm(w) - polyLen(polylines[w.id].slice(0, attempt.reached))) / 1000);
+  const remaining = Math.max(0.02, (wireLengthMm(w) - polyLen(polylines[w.id].slice(0, attempt.reached))) / 1000);
+  const dist = held.hand.distanceTo(start);
+  const span = Math.min(remaining, dist * SAG + 0.005);
+  const tailLen = Math.min(TAIL_M, remaining - span);
   const q = H.board.group.getWorldQuaternion(new THREE.Quaternion()).invert();
   const g = new THREE.Vector3(0, -9.81, 0).applyQuaternion(q);
+  const opts = { gravity: g, floorZ: 0.003, bounds: H.board.surfaceSize };
   const steps = Math.max(1, Math.ceil(dt * 90));
   for (let i = 0; i < steps; i++) {
-    held.result = rope.step(dt / steps, { start, hand: held.hand, length, gravity: g, floorZ: 0.003, bounds: H.board.surfaceSize });
+    held.result = rope.step(dt / steps, { ...opts, start, hand: held.hand, length: span });
+    held.tail = tailLen > 0.01 ? tail.step(dt / steps, { ...opts, start: held.result.end, hand: null, length: tailLen }) : null;
   }
+  if (!held.tail) tail.p = [];
   if (held.result.taut && !held.taut) p.pulse(0.25, 25); // feel the wire go tight
   held.taut = held.result.taut;
   const end = held.result.end;
@@ -294,7 +306,7 @@ function updateLive() {
   const w = H.session.wire;
   const routed = polylines[w.id].slice(0, attempt.reached);
   if (attempt.holding && held?.result) {
-    H.wires.setLiveRope(w, routed, held.result.points);
+    H.wires.setLiveRope(w, routed, held.tail ? [...held.result.points, ...held.tail.points.slice(1)] : held.result.points);
     const e = held.result.end;
     H.wires.setHandle(w, null, true, new THREE.Vector3(e.x, e.y, e.z));
     return;

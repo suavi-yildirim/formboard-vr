@@ -101,7 +101,7 @@ const carPanel = new Panel(0.4);
   carPanel.draw((g) => {
     g.text('VEHICLE VIEW · 1:1', 56, 80, { size: 30, weight: 700, colour: '#5ce1ff' });
     g.text('VW Old Beetle harness', 56, 150, { size: 52, weight: 700 });
-    g.para('Orange: the ignition harness from the formboard, in place at the engine. Walk around, or hold a controller's grip button, aim at the floor and release to teleport.', 56, 230, 912, { size: 34, colour: '#c5ceda' });
+    g.para('Orange: the ignition harness from the formboard, in place at the engine. Walk around, or hold a controller’s grip button, aim at the floor and release to teleport.', 56, 230, 912, { size: 34, colour: '#c5ceda' });
     g.button('goto:board', '← Back to the formboard', 56, 560, 912, 110, { primary: true, size: 40 });
   });
 }

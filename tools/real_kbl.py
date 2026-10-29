@@ -175,8 +175,9 @@ def formboard(path, title, source):
     pitch = 50
     pts = np.array(list(P.values()))
     lo, hi = pts.min(axis=0), pts.max(axis=0)
-    cols = max(24, math.ceil((hi[0] - lo[0] + 200) / pitch))
-    rows = max(16, math.ceil((hi[1] - lo[1] + 200) / pitch))
+    # board fitted to the harness (within arm's reach), harness itself stays 1:1
+    cols = math.ceil((hi[0] - lo[0] + 100) / pitch)
+    rows = math.ceil((hi[1] - lo[1] + 100) / pitch)
     off = np.array([cols * pitch, rows * pitch]) / 2 - (lo + hi) / 2
     xy = {n: P[n] + off for n in P}
 

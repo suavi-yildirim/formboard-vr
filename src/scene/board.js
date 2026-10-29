@@ -31,6 +31,12 @@ export class Board {
     return new THREE.Vector3(p.x / 1000 - this.size.w / 2000, p.y / 1000 - this.size.h / 2000, z);
   }
 
+  // Any world point -> board mm in the plane plus its height above the surface (metres).
+  probe(world) {
+    const l = this.group.worldToLocal(world.clone());
+    return { mm: { x: (l.x + this.size.w / 2000) * 1000, y: (l.y + this.size.h / 2000) * 1000 }, z: l.z, local: l };
+  }
+
   // World point on the surface -> board mm, or null when off the grid area (with margin).
   toMm(world) {
     const l = this.group.worldToLocal(world.clone());
@@ -122,7 +128,7 @@ export class Board {
 
   buildConnectors() {
     this.connectors = {};
-    const body = this.dense ? new THREE.BoxGeometry(0.03, 0.022, 0.022) : new THREE.BoxGeometry(0.07, 0.045, 0.03);
+    const body = this.dense ? new THREE.BoxGeometry(0.03, 0.022, 0.022) : new THREE.BoxGeometry(0.05, 0.035, 0.026);
     for (const n of this.h.nodes.filter((x) => x.kind === 'connector')) {
       const grp = new THREE.Group();
       const mesh = new THREE.Mesh(body, new THREE.MeshStandardMaterial({ color: 0x2b2f36, roughness: 0.5 }));

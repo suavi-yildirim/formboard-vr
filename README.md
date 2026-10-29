@@ -3,16 +3,19 @@
 VR training for wire-harness assembly on a formboard. It runs in the browser on Meta Quest 3 (WebXR), with no install.
 
 **Try it:** https://suavi-yildirim.github.io/formboard-vr/
-- **On Quest 3:** open the link in the Quest Browser, press *Enter VR*, then point and pinch (hand tracking) or pull the trigger.
+- **On Quest 3:** open the link in the Quest Browser and press *Enter VR*.
+  - **Wires and pegs by hand:** pinch the glowing wire end between thumb and index finger, right at the wire (within 3 cm), and pull it through the pegs. The wire end stays at your fingertips. With controllers, the trigger grips at the controller tip.
+  - **Buttons:** point at the panel and pinch.
+  - **Moving:** point at the floor, pinch and release to teleport. *Go to car* and *Back to the formboard* jump you there.
 - **On desktop:** left-click the panel and drag wires on the board. Right-drag to look around, Shift + right-drag or the arrow keys to pan, scroll to zoom. Desktop browsers have no WebXR, so the app runs there without the VR button.
 
 ## What it does
 
-1. **Choose the harness.**
+1. **Choose the harness.** The board is sized to the harness (the harness itself is 1:1) and stands like a desk easel within arm's reach.
    - The **VW ignition harness** is real KBL data from the public VW "Old Beetle" sample: 18 wires, 20 connectors, flattened from the 3D vehicle geometry onto a 1:1 formboard.
    - The **door harness** is a fictitious example with variants that come from the KBL modules (base equipment, comfort, ambient light, full).
 2. **Board prep.** Ghost pegs show where the guide pegs and Y-pegs go, and you set each one.
-3. **Routing, one wire at a time.** Grab the glowing wire end at the start connector and pull it along the board.
+3. **Routing, one wire at a time.** Pinch the glowing wire end at the start connector and pull it along the board. In VR this is direct touch at the fingertips; rays are only used for the panel and for teleporting.
    - The wire snaps to the next correct peg, with sound and haptic feedback.
    - A wrong branch or a skipped peg flashes red and counts as an error. Passing near other pegs while staying on track does not.
    - Reaching the target connector completes the wire, and earlier wires fade back.
@@ -20,7 +23,7 @@ VR training for wire-harness assembly on a formboard. It runs in the browser on 
    - **Guided** shows the path and the next peg.
    - **Test** shows only the target connector, so you route from the board drawing. Hints ("Show me") are counted.
 5. **Quality check and summary.** You get the time and errors per wire, plus a JSON log for evaluation.
-6. **Vehicle view.** To your right stands the complete VW vehicle harness at 1:1 (183 segments, from the KBL centre lines). The ignition harness you just built glows orange where it sits in the car. On desktop, use the *Vehicle view* button.
+6. **Vehicle view.** To your right stands the complete VW vehicle harness at 1:1 (183 segments, from the KBL centre lines). The ignition harness you just built glows orange where it sits in the car. Use *Go to car* (VR: jump there; desktop: camera view), or teleport.
 
 ## Data: from KBL to formboard
 

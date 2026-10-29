@@ -91,11 +91,14 @@ export class WireLayer {
     for (const m of this.done.values()) m.material.opacity = dim ? 0.35 : 1;
   }
 
-  setLive(wire, pointsMm, tipConnector = false) {
+  // freeEnd: optional board-local point (e.g. the fingertips) where the held wire end hangs.
+  setLive(wire, pointsMm, freeEnd = null) {
     this.clearLive();
-    if (!wire || pointsMm.length < 2) return;
+    const pts = wire ? this.points3(pointsMm, [true, false]) : [];
+    if (freeEnd) pts.push(freeEnd.clone().setZ(Math.max(freeEnd.z, WIRE_Z * 0.5)));
+    if (pts.length < 2) return;
     const mat = wireMaterial(wire, { emissive: COLOURS[wire.colour] ?? 0, emissiveIntensity: 0.2 });
-    this.live = this.tube(this.points3(pointsMm, [true, tipConnector]), wireRadius(wire.cross_section_mm2), mat);
+    this.live = this.tube(pts, wireRadius(wire.cross_section_mm2), mat);
     this.group.add(this.live);
   }
 
@@ -128,12 +131,13 @@ export class WireLayer {
     if (this.ghost) this.ghost.visible = v;
   }
 
-  setHandle(wire, pMm, held) {
-    if (!wire || !pMm) { this.handle.visible = false; return; }
+  // The wire end: on the board (pMm), or at a board-local point such as the fingertips (local).
+  setHandle(wire, pMm, held, local = null) {
+    if (!wire || (!pMm && !local)) { this.handle.visible = false; return; }
     const c = COLOURS[wire.colour] ?? 0xffffff;
     this.handle.material.color.setHex(c);
     this.handleGlow.material.color.setHex(c);
-    this.handle.position.copy(this.board.local(pMm, WIRE_Z + 0.004));
+    this.handle.position.copy(local ? local.clone().setZ(Math.max(local.z, WIRE_Z * 0.5)) : this.board.local(pMm, WIRE_Z + 0.004));
     this.handle.visible = true;
     this.handle.userData.held = held;
   }

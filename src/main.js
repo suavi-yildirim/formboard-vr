@@ -5,6 +5,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { validateHarness, variants, wiresForVariant, nodePositions, bundleSlots, wirePolyline, nodeById, COLOURS, COLOUR_NAMES } from './core/harness.js';
 import { distance } from './core/grid.js';
 import { RoutingAttempt, GRAB_MM, neighbourMap } from './core/router.js';
+
+const TIP_GRAB_MM = 30; // fingertips must be this close to the wire end (or a ghost peg) to take it
 import { Session, QA_ITEMS } from './core/session.js';
 import { buildWorkshop } from './scene/workshop.js';
 import { Board } from './scene/board.js';
@@ -13,6 +15,7 @@ import { Panel } from './scene/panel.js';
 import { Sfx } from './scene/audio.js';
 import { VehicleView } from './scene/vehicle.js';
 import { Pointers } from './input/pointers.js';
+import { Locomotion } from './input/locomotion.js';
 
 const dataUrl = (f) => new URL(`./data/${f}`, import.meta.url);
 const getJson = async (f) => (await fetch(dataUrl(f))).json();
@@ -41,7 +44,7 @@ controls.listenToKeyEvents(window); // arrow keys pan
 
 // Desktop views: frame the panel and the board together, or the vehicle harness.
 const VIEWS = {
-  board: { left: -1.6, right: 0.75, bottom: 0.75, top: 1.68, z: -0.55, y: 0.15 },
+  board: { left: -1.35, right: 0.62, bottom: 0.55, top: 1.6, z: -0.45, y: 0.45 },
   vehicle: { left: -2.4, right: 2.4, bottom: 0, top: 2.2, z: 0, y: 0, centre: new THREE.Vector3(2.5, 0.75, -0.9), from: new THREE.Vector3(-1, 0.45, 0.15) },
 };
 let view = 'board';
@@ -72,12 +75,42 @@ backButton.addEventListener('click', () => setView('board'));
 
 const { metal } = buildWorkshop(scene);
 const panel = new Panel();
-panel.mesh.position.set(-0.98, 1.3, -0.4);
-panel.mesh.rotation.y = 0.55;
+panel.mesh.position.set(-0.82, 1.28, -0.3);
+panel.mesh.rotation.y = 0.6;
 scene.add(panel.mesh);
 
 const sfx = new Sfx();
 const pointers = new Pointers(renderer, scene, camera, renderer.domElement);
+const loco = new Locomotion(renderer, scene);
+
+// Jump spots (floor position and the point to face). The car spot is beside the engine end.
+const SPOTS = {
+  board: { pos: { x: 0, z: 0 }, look: { x: 0, z: -0.48 } },
+  car: { pos: { x: 1.2, z: 0.55 }, look: { x: 2.5, z: 0.1 } },
+};
+
+// Small panel at the car with the way back to the workstation.
+const carPanel = new Panel(0.4);
+{
+  const { pos, look } = SPOTS.car;
+  const d = new THREE.Vector3(look.x - pos.x, 0, look.z - pos.z).normalize();
+  const left = new THREE.Vector3(d.z, 0, -d.x);
+  carPanel.mesh.position.set(pos.x + d.x * 0.55 + left.x * 0.45, 1.15, pos.z + d.z * 0.55 + left.z * 0.45);
+  carPanel.mesh.lookAt(pos.x, 1.5, pos.z);
+  scene.add(carPanel.mesh);
+  carPanel.draw((g) => {
+    g.text('VEHICLE VIEW · 1:1', 56, 80, { size: 30, weight: 700, colour: '#5ce1ff' });
+    g.text('VW Old Beetle harness', 56, 150, { size: 52, weight: 700 });
+    g.para('Orange: the ignition harness from the formboard, in place at the engine. Point at the floor and pinch to walk around.', 56, 230, 912, { size: 34, colour: '#c5ceda' });
+    g.button('goto:board', '← Back to the formboard', 56, 560, 912, 110, { primary: true, size: 40 });
+  });
+}
+const panels = [panel, carPanel];
+
+function goTo(spot) {
+  if (loco.active) loco.jump(SPOTS[spot]);
+  else setView(spot === 'car' ? 'vehicle' : 'board');
+}
 
 // The VW vehicle harness stands to the user's right, 1:1, with the engine end (rear of the Beetle,
 // where the ignition harness sits) towards the user.
@@ -113,8 +146,10 @@ async function loadHarness(i) {
   H.vlist = variants(h);
   H.session = new Session(h);
   H.board = new Board(h, metal);
-  H.board.group.position.set(0, 1.2, -0.62);
-  H.board.group.rotation.x = -0.35;
+  // Tilted like a desk easel, resting on the bench, within arm's reach of the standing user.
+  const tilt = 0.7, heightM = H.board.size.h / 1000 + 0.09;
+  H.board.group.position.set(0, 0.765 + (heightM / 2) * Math.cos(tilt), -0.48);
+  H.board.group.rotation.x = -tilt;
   scene.add(H.board.group);
   H.wires = new WireLayer(H.board);
   ui.harnessIdx = i;
@@ -196,12 +231,18 @@ function updateGuides() {
   H.wires.setGhostVisible(guided);
 }
 
-// Live wire = routed part (bundle-offset points) plus the free end at the pointer while held.
-function updateLive(pointerMm) {
+// Live wire = routed part (bundle-offset points) plus the free end while held: at the fingertips
+// in VR (freeEnd, board-local 3D point), on the board under the mouse on desktop (pointerMm).
+function updateLive(pointerMm, freeEnd) {
   const w = H.session.wire;
   const routed = polylines[w.id].slice(0, attempt.reached);
+  if (attempt.holding && freeEnd) {
+    H.wires.setLive(w, routed, freeEnd);
+    H.wires.setHandle(w, null, true, freeEnd);
+    return;
+  }
   const pts = attempt.holding && pointerMm ? [...routed, pointerMm] : routed;
-  if (pts.length >= 2) H.wires.setLive(w, pts, false);
+  if (pts.length >= 2) H.wires.setLive(w, pts);
   else H.wires.clearLive();
   H.wires.setHandle(w, attempt.holding && pointerMm ? pointerMm : routed.at(-1), attempt.holding);
 }
@@ -269,7 +310,8 @@ function onButton(id) {
   else if (id.startsWith('mode:')) ui.mode = id.split(':')[1];
   else if (id === 'start') startRun();
   else if (id === 'menu') toMenu();
-  else if (id === 'vehicle') { if (!renderer.xr.isPresenting) setView('vehicle'); }
+  else if (id === 'vehicle') goTo('car');
+  else if (id === 'goto:board') goTo('board');
   else if (id === 'allpegs') { for (const p of s.pegs) H.board.setPeg(p.id, 'set'); s.setAllPegs(now()); enterWire(); return; }
   else if (id === 'showme') showMe();
   else if (id === 'back') back();
@@ -283,11 +325,11 @@ function onButton(id) {
 
 function onBoardPress(p) {
   const s = H.session;
-  if (s.state !== 'prep' || !p.boardMm) return;
-  let best = null, bestD = GRAB_MM;
+  if (s.state !== 'prep' || !p.work.mm) return;
+  let best = null, bestD = p.work.grab;
   for (const peg of s.pegs) {
     if (s.pegsSet.has(peg.id)) continue;
-    const d = distance(p.boardMm, H.pos[peg.id]);
+    const d = distance(p.work.mm, H.pos[peg.id]);
     if (d < bestD) { best = peg; bestD = d; }
   }
   if (!best) return;
@@ -327,7 +369,7 @@ const views = {
     g.button('mode:guided', 'Guided', L, 526, 448, 60, { selected: ui.mode === 'guided' });
     g.button('mode:test', 'Test', L + 464, 526, 448, 60, { selected: ui.mode === 'test' });
     g.button('start', ui.loading ? 'Loading…' : 'Start', L, 610, 600, 80, { primary: true, size: 32, disabled: ui.loading });
-    g.button('vehicle', renderer.xr.isPresenting ? 'Car: turn right →' : 'Vehicle view', L + 616, 610, 296, 80, { disabled: !vehicle, size: 26 });
+    g.button('vehicle', 'Go to car →', L + 616, 610, 296, 80, { disabled: !vehicle, size: 26 });
   },
 
   prep(g) {
@@ -394,7 +436,7 @@ const views = {
       g.text(`${w.wire}  ${w.time_s.toFixed(1)} s  ${w.errors} err`, x + 36, y, { size: Math.min(26, rowH * 0.62), colour: w.errors ? '#ffb3b3' : '#e9eef5', max: colW - 44 });
     });
     g.button('download', 'Download log', L, 620, 290, 76);
-    g.button('vehicle', renderer.xr.isPresenting ? 'Car: turn right →' : 'Vehicle view', L + 311, 620, 290, 76, { disabled: !vehicle });
+    g.button('vehicle', 'Go to car →', L + 311, 620, 290, 76, { disabled: !vehicle });
     g.button('again', 'New run', L + 622, 620, 290, 76, { primary: true });
   },
 };
@@ -415,39 +457,82 @@ function frame() {
   const t = clock.elapsedTime;
   if (!renderer.xr.isPresenting) controls.update();
 
-  let hover = null;
+  const hover = new Map(panels.map((x) => [x, null]));
+  let marker = null;
   for (const p of pointers.update()) {
-    const hp = p.raycaster.intersectObject(panel.mesh)[0];
-    const hb = H.board ? p.raycaster.intersectObject(H.board.surface)[0] : null;
-    const panelFirst = hp && (!hb || hp.distance < hb.distance);
-    p.panelId = panelFirst ? panel.hit(hp.uv) : null;
-    p.boardMm = !panelFirst && hb ? H.board.toMm(hb.point) : null;
-    p.setRayLength((panelFirst ? hp : hb)?.distance);
-    if (p.panelId) hover = p.panelId;
-    if (p.justPressed) {
+    const mouse = p === pointers.mouse;
+    // Board work. VR: direct touch at the fingertips (pinch point), no ray. Desktop: mouse ray.
+    let nearBoard = false;
+    if (mouse) {
+      p.work = { mm: null, pressed: false, justPressed: false, canGrab: false, grab: GRAB_MM, freeEnd: null };
+    } else {
+      const probe = p.tip && H.board ? H.board.probe(p.tip) : null;
+      const inside = probe && probe.mm.x > -60 && probe.mm.y > -60 && probe.mm.x < H.board.size.w + 60 && probe.mm.y < H.board.size.h + 60;
+      nearBoard = !!(inside && probe.z > -0.05 && probe.z < 0.2);
+      const touching = inside && probe.z > -0.03 && probe.z < 0.07;
+      p.work = {
+        mm: touching ? probe.mm : null, pressed: p.pinching, justPressed: p.justPinched && nearBoard,
+        canGrab: p.justPinched && touching, // pick up only where the pinch closes, not by sweeping into the wire
+        grab: TIP_GRAB_MM, freeEnd: probe ? probe.local : null,
+      };
+    }
+
+    // Rays: panel buttons and teleport. In VR not while the hand works at the board.
+    let hp = null, hitPanel = null;
+    if (!nearBoard) {
+      for (const x of panels) {
+        const h = p.raycaster.intersectObject(x.mesh)[0];
+        if (h && (!hp || h.distance < hp.distance)) { hp = h; hitPanel = x; }
+      }
+    }
+    const hb = mouse && H.board ? p.raycaster.intersectObject(H.board.surface)[0] : null;
+    const panelFirst = !!hp && (!hb || hp.distance < hb.distance);
+    p.panelId = panelFirst ? hitPanel.hit(hp.uv) : null;
+    if (mouse) {
+      const mm = !panelFirst && hb ? H.board.toMm(hb.point) : null;
+      const pressed = p.pressed && !p.pressOnPanel;
+      p.work = { mm, pressed, justPressed: p.justPressed && !panelFirst, canGrab: pressed, grab: GRAB_MM, freeEnd: null };
+    }
+    // Teleport target: the floor, when the ray hits nothing else (VR only).
+    const floor = !mouse && !nearBoard && !hp && loco.active ? loco.floorHit(p.raycaster.ray) : null;
+    p.setRayLength(hp ? hp.distance : floor ? floor.distanceTo(p.raycaster.ray.origin) : undefined);
+    if (!mouse) pointers.setRayVisible(p, !!(hp || (floor && !p.pinching) || p.pressOnFloor));
+    if (p.panelId) hover.set(hitPanel, p.panelId);
+    if (p.justPressed && !nearBoard) {
       sfx.unlock();
       p.pressOnPanel = panelFirst;
+      p.pressOnFloor = !!floor;
+      p.floorTarget = floor; // a pinch shorter than one frame still teleports
       if (p.panelId) onButton(p.panelId);
-      else if (!panelFirst && H.session) onBoardPress(p);
+    }
+    if (p.work.justPressed && H.session) { sfx.unlock(); onBoardPress(p); }
+    if (p.pressOnFloor) {
+      if (p.pressed) { if (floor) p.floorTarget = floor; marker = p.floorTarget ?? null; }
+      else {
+        if (p.floorTarget) { loco.teleport(p.floorTarget); sfx.grab(); }
+        p.pressOnFloor = false;
+        p.floorTarget = null;
+      }
     }
   }
-  panel.setHover(hover);
+  for (const [x, id] of hover) x.setHover(id);
+  loco.showMarker(marker);
 
   if (H.session?.state === 'route' && attempt) {
     if (!owner) {
       for (const p of pointers.list) {
-        if (!p.enabled || !p.pressed || p.pressOnPanel) continue;
-        handleEvents(attempt.update(p.boardMm, true), p);
+        if (!p.enabled || !p.work?.canGrab || p.pressOnPanel || p.pressOnFloor) continue;
+        handleEvents(attempt.update(p.work.mm, true, p.work.grab), p);
         if (attempt?.holding) { owner = p; break; }
       }
     } else {
       const p = owner;
-      const events = attempt.update(p.enabled ? p.boardMm : null, p.enabled && p.pressed);
+      const events = attempt.update(p.enabled ? p.work.mm : null, p.enabled && p.work.pressed, p.work.grab);
       if (!attempt.holding) owner = null;
       handleEvents(events, p);
     }
     if (H.session.state === 'route' && attempt) {
-      updateLive(owner?.boardMm ?? null);
+      updateLive(owner?.work.mm ?? null, owner?.work.freeEnd ?? null);
       if (ui.ghostUntil && now() > ui.ghostUntil) { ui.ghostUntil = 0; updateGuides(); }
       const sec = Math.floor(now() / 1000);
       if (sec !== ui.lastSecond) { ui.lastSecond = sec; refresh(); }
@@ -473,4 +558,4 @@ window.addEventListener('resize', () => {
 });
 
 // Debug handle. step() renders one frame by hand, for scripted tests when the page gets no animation frames.
-window.formboard = { H, panel, camera, step: frame, load: loadHarness, setView };
+window.formboard = { H, panel, carPanel, camera, step: frame, load: loadHarness, setView };

@@ -1,10 +1,15 @@
 // One pointer model for every input: Quest hands (pinch), Quest controllers (trigger) and the mouse.
-// Each pointer has a world-space ray and a pressed flag; the app never cares which device it is.
+// Each pointer has a world-space ray and a pressed flag (for the panel and the floor).
+// XR pointers also have a "tip": the pinch point between thumb and index fingertip (hands) or a
+// point just in front of the controller. Wires and pegs are handled at the tip, by direct touch.
 import * as THREE from 'three';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
 
 const RAY_LEN = 3;
+const PINCH_ON = 0.02; // thumb-index distance (m) that starts a pinch
+const PINCH_OFF = 0.035; // and that ends it (hysteresis against flicker)
+const CONTROLLER_TIP = 0.03; // tip point ahead of the controller's ray origin
 
 class Pointer {
   constructor(id) {
@@ -17,6 +22,9 @@ class Pointer {
     this.active = false;
     this.line = null;
     this.inputSource = null;
+    this.tip = null; // world position of the pinch point / controller tip, or null
+    this.pinching = false;
+    this.justPinched = false;
   }
 
   press() {
@@ -69,6 +77,7 @@ export class Pointers {
       const hand = renderer.xr.getHand(i);
       hand.add(handModels.createHandModel(hand, 'mesh'));
       scene.add(hand);
+      p.hand = hand;
 
       this.list.push(p);
     }
@@ -107,9 +116,32 @@ export class Pointers {
           p.raycaster.ray.origin.setFromMatrixPosition(m);
           p.raycaster.ray.direction.set(0, 0, -1).transformDirection(m);
         }
-        if (p.line) p.line.visible = p.enabled;
+        this.updateTip(p);
       }
     }
     return this.list.filter((p) => p.enabled);
+  }
+
+  updateTip(p) {
+    const was = p.pinching;
+    p.tip = null;
+    if (p.enabled && p.inputSource?.hand) {
+      const index = p.hand.joints['index-finger-tip'], thumb = p.hand.joints['thumb-tip'];
+      if (index?.visible !== false && thumb && index) {
+        const a = index.getWorldPosition(new THREE.Vector3()), b = thumb.getWorldPosition(new THREE.Vector3());
+        const gap = a.distanceTo(b);
+        p.tip = a.add(b).multiplyScalar(0.5);
+        p.pinching = p.pinching ? gap < PINCH_OFF : gap < PINCH_ON;
+      } else p.pinching = false;
+    } else if (p.enabled) {
+      p.tip = p.raycaster.ray.origin.clone().addScaledVector(p.raycaster.ray.direction, CONTROLLER_TIP);
+      p.pinching = p.pressed;
+    } else p.pinching = false;
+    p.justPinched = p.pinching && !was;
+  }
+
+  // Show the ray only when it is useful (panel or floor); never through the hand at the board.
+  setRayVisible(p, v) {
+    if (p.line) p.line.visible = v;
   }
 }

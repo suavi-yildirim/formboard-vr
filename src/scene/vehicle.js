@@ -70,15 +70,24 @@ export class VehicleView {
     outline.position.y = -this.liftM + 0.003;
     this.group.add(outline);
 
-    const s = sign([
-      ['VW Old Beetle · full vehicle harness, 1:1', '#ffffff', 40],
-      [`${data.full.length} segments from KBL ${data.full_id} · ${data.full_connectors} connectors`, '#c5ceda', 30],
-      [`Orange: ignition harness ${data.highlight_id}, the one you build on the formboard`, '#f7a35c', 30],
-      ['Source: VW VOBES sample, prostep ivip ECAD wiki, CC BY-SA 4.0', '#9aa7b8', 26],
-    ]);
+    this.data = data;
+    this.sign = null;
+  }
+
+  // Sign above the car; texts come from the app (language). Four lines: title, two facts, source.
+  setSign(texts, lookAt) {
+    const s = sign([[texts[0], '#ffffff', 40], [texts[1], '#c5ceda', 30], [texts[2], '#f7a35c', 30], [texts[3], '#9aa7b8', 26]]);
     s.position.set(0, 1.2, 0);
+    if (this.sign) {
+      this.group.remove(this.sign);
+      this.sign.geometry.dispose();
+      this.sign.material.map.dispose();
+      this.sign.material.dispose();
+    }
     this.sign = s;
     this.group.add(s);
+    this.group.updateMatrixWorld(true);
+    s.lookAt(lookAt);
   }
 
   get liftM() { return 0.35; } // harness z=0 sits about this high above the road

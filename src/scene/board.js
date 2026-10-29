@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { boardSizeMm, colName } from '../core/grid.js';
 import { nodePositions } from '../core/harness.js';
+import { t, term } from '../i18n.js';
 
 const MARGIN_MM = 45;
 const TEX_PX_PER_MM = 1.6;
@@ -56,6 +57,20 @@ export class Board {
 
   // Plywood board with the 1:1 formboard drawing printed on paper and glued on, as in harness shops.
   buildSurface() {
+    const { w, h } = this.size;
+    this.surface = new THREE.Mesh(new THREE.PlaneGeometry((w + 2 * MARGIN_MM) / 1000, (h + 2 * MARGIN_MM) / 1000), new THREE.MeshStandardMaterial({ map: this.surfaceTexture(), roughness: 0.95, envMapIntensity: 0.4 }));
+    this.surface.receiveShadow = true;
+    this.group.add(this.surface);
+  }
+
+  // Redraw the printed drawing (its title follows the language).
+  relabel() {
+    const old = this.surface.material.map;
+    this.surface.material.map = this.surfaceTexture();
+    old.dispose();
+  }
+
+  surfaceTexture() {
     const { w, h } = this.size;
     const W = w + 2 * MARGIN_MM, H = h + 2 * MARGIN_MM;
     const c = document.createElement('canvas');
@@ -118,18 +133,16 @@ export class Board {
     }
     g.textAlign = 'left';
     g.font = `bold ${12 * s}px system-ui, sans-serif`;
-    g.fillText(`${this.h.id} · ${this.h.description} · formboard 1:1`, X(4), Y(h - 12));
+    g.fillText(`${this.h.id} · ${term(this.h.description)} · ${t('drawing')}`, X(4), Y(h - 12));
     if (this.h.source) {
       g.font = `${9 * s}px system-ui, sans-serif`;
-      g.fillText(this.h.source, X(4), Y(8));
+      g.fillText(term(this.h.source), X(4), Y(8));
     }
 
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 8;
-    this.surface = new THREE.Mesh(new THREE.PlaneGeometry(W / 1000, H / 1000), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, envMapIntensity: 0.4 }));
-    this.surface.receiveShadow = true;
-    this.group.add(this.surface);
+    return tex;
   }
 
   buildFrame() {

@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { validateHarness, variants, wiresForVariant, nodePositions, bundleSlots, wirePolyline, nodeById, COLOURS, COLOUR_NAMES } from './core/harness.js';
+import { validateHarness, variants, wiresForVariant, nodePositions, bundleSlots, wirePolyline, nodeById, COLOURS } from './core/harness.js';
 import { distance } from './core/grid.js';
 import { RoutingAttempt, GRAB_MM, neighbourMap } from './core/router.js';
 
@@ -16,6 +16,7 @@ import { Panel } from './scene/panel.js';
 import { Sfx } from './scene/audio.js';
 import { VehicleView } from './scene/vehicle.js';
 import { Pointers } from './input/pointers.js';
+import { t, term, colourName, getLang, setLang, onLangChange } from './i18n.js';
 import { Locomotion } from './input/locomotion.js';
 import { heldWire } from './core/heldwire.js';
 import { WIRE_Z } from './scene/wires.js';
@@ -108,10 +109,10 @@ const carPanel = new Panel(0.4);
   carPanel.mesh.lookAt(pos.x, 1.5, pos.z);
   scene.add(carPanel.mesh);
   carPanel.draw((g) => {
-    g.text('VEHICLE VIEW · 1:1', 56, 80, { size: 30, weight: 700, colour: '#5ce1ff' });
-    g.text('VW Old Beetle harness', 56, 150, { size: 52, weight: 700 });
-    g.para('Orange: the ignition harness from the formboard, in place at the engine. Walk around, or hold a controller’s grip button, aim at the floor and release to teleport.', 56, 230, 912, { size: 34, colour: '#c5ceda' });
-    g.button('goto:board', '← Back to the formboard', 56, 560, 912, 110, { primary: true, size: 40 });
+    g.text(t('carKicker'), 56, 80, { size: 30, weight: 700, colour: '#5ce1ff' });
+    g.text(t('carTitle'), 56, 150, { size: 52, weight: 700, max: 912 });
+    g.para(t('carText'), 56, 230, 912, { size: 34, colour: '#c5ceda' });
+    g.button('goto:board', t('backBoard'), 56, 560, 912, 110, { primary: true, size: 40 });
   });
 }
 const panels = [panel, carPanel];
@@ -129,10 +130,20 @@ getJson('vw_vehicle.json').then((data) => {
   vehicle.group.position.set(2.5, vehicle.liftM, -0.9);
   vehicle.group.rotation.y = -Math.PI / 2;
   scene.add(vehicle.group);
-  vehicle.group.updateMatrixWorld(true);
-  vehicle.sign.lookAt(new THREE.Vector3(0, 1.4, 0));
+  updateVehicleSign();
   refresh();
 });
+
+function updateVehicleSign() {
+  if (!vehicle) return;
+  const d = vehicle.data;
+  vehicle.setSign([
+    t('sign1'),
+    t('sign2', { n: d.full.length, id: d.full_id, c: d.full_connectors }),
+    t('sign3', { id: d.highlight_id }),
+    t('sign4'),
+  ], new THREE.Vector3(0, 1.4, 0));
+}
 
 // --- harness-dependent state ---
 const H = { file: null, harness: null, pos: {}, nb: {}, vlist: [], problems: [], session: null, board: null, wires: null };
@@ -318,7 +329,7 @@ function handleEvents(events, p) {
     if (e.type === 'wrong') {
       sfx.wrong(); p.pulse(1, 140);
       H.board.flash(e.at, 0xff3b30);
-      ui.status = H.session.mode === 'guided' ? `✗ ${e.at} is wrong, next is ${e.expected}` : `✗ ${e.at} is not on this route`;
+      ui.status = H.session.mode === 'guided' ? t('statusWrongGuided', { p: e.at, n: e.expected }) : t('statusWrongTest', { p: e.at });
       ui.statusKind = 'err';
     }
     if (e.type === 'done') {
@@ -364,6 +375,7 @@ function downloadLog() {
 function onButton(id) {
   sfx.click();
   const s = H.session;
+  if (id.startsWith('lang:')) { setLang(id.split(':')[1]); return; }
   if (id.startsWith('harness:')) { const i = Number(id.split(':')[1]); if (i !== ui.harnessIdx) loadHarness(i); return; }
   if (id.startsWith('variant:')) ui.variant = Number(id.split(':')[1]);
   else if (id.startsWith('mode:')) ui.mode = id.split(':')[1];
@@ -404,106 +416,111 @@ function onBoardPress(p) {
 const L = 56, R = 968;
 const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
-function header(g, kicker, title) {
-  g.text(kicker, L, 72, { size: 24, weight: 700, colour: '#5ce1ff' });
+// Kicker line and title; the menu also shows the EN | DE language switch at the top right.
+function header(g, kicker, title, langSwitch = false) {
+  g.text(kicker, L, 72, { size: 24, weight: 700, colour: '#5ce1ff', max: langSwitch ? 700 : R - L });
+  if (langSwitch) {
+    g.button('lang:en', 'EN', R - 176, 36, 84, 50, { selected: getLang() === 'en', size: 24 });
+    g.button('lang:de', 'DE', R - 84, 36, 84, 50, { selected: getLang() === 'de', size: 24 });
+  }
   if (title) g.text(title, L, 124, { size: 40, weight: 700, max: R - L });
 }
 
 const views = {
   menu(g) {
     const h = H.harness;
-    header(g, 'FORMBOARD VR · WIRE HARNESS TRAINING', h.description);
-    g.text(`${h.id} · ${h.wires.length} wires · ${h.source}`, L, 162, { size: 22, colour: '#9aa7b8', max: R - L });
-    if (H.problems.length) { g.para(`Harness data is invalid: ${H.problems.join('; ')}`, L, 230, R - L, { colour: '#ff6b6b' }); return; }
-    g.text('Harness', L, 212, { size: 24, weight: 600, colour: '#9aa7b8' });
-    catalogue.forEach((c, i) => g.button(`harness:${i}`, `${c.label} · ${c.note}`, L + i * 464, 226, 448, 62, { selected: ui.harnessIdx === i, size: 25 }));
-    g.text('Variant', L, 326, { size: 24, weight: 600, colour: '#9aa7b8' });
+    header(g, t('menuKicker'), term(h.description), true);
+    g.text(`${h.id} · ${t('wiresN', { n: h.wires.length })} · ${term(h.source)}`, L, 162, { size: 22, colour: '#9aa7b8', max: R - L });
+    if (H.problems.length) { g.para(t('invalid', { p: H.problems.join('; ') }), L, 230, R - L, { colour: '#ff6b6b' }); return; }
+    g.text(t('harness'), L, 212, { size: 24, weight: 600, colour: '#9aa7b8' });
+    catalogue.forEach((c, i) => g.button(`harness:${i}`, `${term(c.label)} · ${term(c.note)}`, L + i * 464, 226, 448, 62, { selected: ui.harnessIdx === i, size: 25 }));
+    g.text(t('variant'), L, 326, { size: 24, weight: 600, colour: '#9aa7b8' });
     H.vlist.forEach((v, i) => {
       const n = wiresForVariant(h, v).length;
-      g.button(`variant:${i}`, `${v.label} · ${n}`, L + (i % 2) * 464, 340 + Math.floor(i / 2) * 70, 448, 58, { selected: ui.variant === i, size: 24 });
+      g.button(`variant:${i}`, `${term(v.label)} · ${n}`, L + (i % 2) * 464, 340 + Math.floor(i / 2) * 70, 448, 58, { selected: ui.variant === i, size: 24 });
     });
     if (h.flattening) {
-      g.para(`Flattened from 3D KBL: ${h.flattening.segments} segments at true length (max. deviation ${h.flattening.max_length_error_pct} %), pegs placed automatically.`, L, 440, R - L, { size: 20, colour: '#c5ceda' });
+      g.para(t('flattened', { n: h.flattening.segments, d: h.flattening.max_length_error_pct }), L, 440, R - L, { size: 20, colour: '#c5ceda' });
     }
-    g.text('Mode', L, 514, { size: 24, weight: 600, colour: '#9aa7b8' });
-    g.button('mode:guided', 'Guided', L, 526, 448, 60, { selected: ui.mode === 'guided' });
-    g.button('mode:test', 'Test', L + 464, 526, 448, 60, { selected: ui.mode === 'test' });
-    g.button('start', ui.loading ? 'Loading…' : 'Start', L, 610, 600, 80, { primary: true, size: 32, disabled: ui.loading });
-    g.button('vehicle', 'Go to car →', L + 616, 610, 296, 80, { disabled: !vehicle, size: 26 });
+    g.text(t('mode'), L, 514, { size: 24, weight: 600, colour: '#9aa7b8' });
+    g.button('mode:guided', t('guided'), L, 526, 448, 60, { selected: ui.mode === 'guided' });
+    g.button('mode:test', t('test'), L + 464, 526, 448, 60, { selected: ui.mode === 'test' });
+    g.button('start', ui.loading ? t('loading') : t('start'), L, 610, 600, 80, { primary: true, size: 32, disabled: ui.loading });
+    g.button('vehicle', t('goCar'), L + 616, 610, 296, 80, { disabled: !vehicle, size: 26 });
   },
 
   prep(g) {
     const s = H.session;
-    header(g, 'STEP 1 · BOARD PREP', 'Set the guide pegs');
-    const y = g.para('Point at a blue ghost peg on the board and pinch (or pull the trigger) to insert it. Orange caps are Y-pegs at branch points.', L, 190, R - L);
+    header(g, t('prepKicker'), t('prepTitle'));
+    const y = g.para(t('prepText'), L, 190, R - L);
     const n = s.pegsSet.size, total = s.pegs.length;
-    g.text(`${n} / ${total} pegs`, L, y + 50, { size: 34, weight: 700 });
+    g.text(t('pegsN', { n, total }), L, y + 50, { size: 34, weight: 700 });
     g.bar(L, y + 74, R - L, 18, n / total);
-    g.button('allpegs', 'Set all pegs', L, 620, 448, 76);
-    g.button('menu', 'Menu', L + 464, 620, 448, 76);
+    g.button('allpegs', t('allPegs'), L, 620, 448, 76);
+    g.button('menu', t('menu'), L + 464, 620, 448, 76);
   },
 
   route(g) {
     const s = H.session;
     const w = s.wire, i = s.index, n = s.wires.length;
-    header(g, `STEP 2 · WIRE ${i + 1} / ${n} · ${s.mode.toUpperCase()}`, '');
+    header(g, t('routeKicker', { i: i + 1, n, mode: t(s.mode).toLocaleUpperCase(getLang()) }), '');
     g.swatch(L + 22, 112, COLOURS[w.colour] ?? 0xcccccc, 22);
-    const colour = `${COLOUR_NAMES[w.colour] ?? w.colour}${w.stripe ? `/${COLOUR_NAMES[w.stripe] ?? w.stripe}` : ''}`;
+    const colour = `${colourName(w.colour)}${w.stripe ? `/${colourName(w.stripe)}` : ''}`;
     g.text(`${w.id}  ${colour} · ${w.cross_section_mm2} mm²`, L + 60, 124, { size: 40, weight: 700, max: R - L - 60 });
-    g.text(`Signal ${w.signal} · ${w.length_mm} mm`, L, 170, { size: 26, colour: '#9aa7b8', max: R - L });
-    g.text('From', L, 222, { size: 24, colour: '#9aa7b8' });
+    g.text(t('signal', { s: w.signal, l: w.length_mm }), L, 170, { size: 26, colour: '#9aa7b8', max: R - L });
+    g.text(t('from'), L, 222, { size: 24, colour: '#9aa7b8' });
     g.text(connLabel(w, 'from'), L + 90, 222, { size: 28, weight: 600, max: R - L - 90 });
-    g.text('To', L, 264, { size: 24, colour: '#9aa7b8' });
+    g.text(t('to'), L, 264, { size: 24, colour: '#9aa7b8' });
     g.text(connLabel(w, 'to'), L + 90, 264, { size: 28, weight: 600, max: R - L - 90 });
     const instr = attempt?.holding
-      ? (s.mode === 'guided' ? `Pull the wire to ${attempt.next}.` : 'Pull the wire along its route to the target connector.')
+      ? (s.mode === 'guided' ? t('pullTo', { p: attempt.next }) : t('pullAlong'))
       : attempt?.reached > 1
-        ? `Grab the wire end at ${attempt.end} to continue.`
-        : `Grab the glowing end at ${w.path[0]} and pull it through the pegs to ${w.path.at(-1)}.`;
+        ? t('grabContinue', { p: attempt.end })
+        : t('grabStart', { a: w.path[0], b: w.path.at(-1) });
     g.para(instr, L, 322, R - L, { size: 28 });
     if (ui.status) g.text(ui.status, L, 420, { size: 30, weight: 700, colour: ui.statusKind === 'err' ? '#ff6b6b' : '#3ddc84' });
     const m = s.metrics[i];
-    g.text(`Errors ${attempt?.errors ?? 0}    Hints ${m.hints}    Time ${fmt((now() - m.start) / 1000)}`, L, 478, { size: 28, colour: '#c5ceda' });
-    g.text(`Peg ${attempt ? attempt.reached : 0} / ${w.path.length}`, R, 478, { size: 28, colour: '#c5ceda', align: 'right' });
+    g.text(t('stats', { e: attempt?.errors ?? 0, h: m.hints, t: fmt((now() - m.start) / 1000) }), L, 478, { size: 28, colour: '#c5ceda' });
+    g.text(t('peg', { a: attempt ? attempt.reached : 0, b: w.path.length }), R, 478, { size: 28, colour: '#c5ceda', align: 'right' });
     g.bar(L, 510, R - L, 14, attempt ? (attempt.reached - 1) / (w.path.length - 1) : 0, `#${(COLOURS[w.colour] ?? 0x5ce1ff).toString(16).padStart(6, '0')}`);
     g.bar(L, 540, R - L, 8, i / n);
-    g.button('showme', 'Show me', L, 620, 290, 76);
-    g.button('back', 'Undo last wire', L + 311, 620, 290, 76, { disabled: i === 0 });
-    g.button('menu', 'Menu', L + 622, 620, 290, 76);
+    g.button('showme', t('showMe'), L, 620, 290, 76);
+    g.button('back', t('undo'), L + 311, 620, 290, 76, { disabled: i === 0 });
+    g.button('menu', t('menu'), L + 622, 620, 290, 76);
   },
 
   qa(g) {
     const s = H.session;
-    header(g, 'STEP 3 · QUALITY CHECK', 'Check the harness');
-    g.text('Connector ends are highlighted. Confirm each check.', L, 172, { size: 26, colour: '#c5ceda' });
-    QA_ITEMS.forEach((item, i) => g.button(`qa:${i}`, `${s.qa.has(i) ? '☑' : '☐'}  ${item}`, L, 210 + i * 92, R - L, 76, { selected: s.qa.has(i) }));
-    g.button('back', 'Back to last wire', L, 620, 448, 76);
-    g.button('menu', 'Menu', L + 464, 620, 448, 76);
+    header(g, t('qaKicker'), t('qaTitle'));
+    g.text(t('qaText'), L, 172, { size: 26, colour: '#c5ceda', max: R - L });
+    QA_ITEMS.forEach((_, i) => g.button(`qa:${i}`, `${s.qa.has(i) ? '☑' : '☐'}  ${t('qa' + i)}`, L, 210 + i * 92, R - L, 76, { selected: s.qa.has(i) }));
+    g.button('back', t('backLast'), L, 620, 448, 76);
+    g.button('menu', t('menu'), L + 464, 620, 448, 76);
   },
 
   summary(g) {
     const s = H.session.summary();
-    header(g, 'DONE · HARNESS COMPLETE', `${s.variant} · ${s.mode}`);
-    g.text(`${fmt(s.total_s)} total`, L, 196, { size: 36, weight: 700 });
-    g.text(`${s.errors} errors`, L + 330, 196, { size: 36, weight: 700, colour: s.errors ? '#ff6b6b' : '#3ddc84' });
-    g.text(`${s.hints} hints`, L + 610, 196, { size: 36, weight: 700, colour: '#c5ceda' });
+    header(g, t('doneKicker'), `${term(s.variant)} · ${t(s.mode)}`);
+    g.text(t('total', { t: fmt(s.total_s) }), L, 196, { size: 36, weight: 700 });
+    g.text(t('errorsN', { n: s.errors }), L + 330, 196, { size: 36, weight: 700, colour: s.errors ? '#ff6b6b' : '#3ddc84' });
+    g.text(t('hintsN', { n: s.hints }), L + 610, 196, { size: 36, weight: 700, colour: '#c5ceda' });
     const cols = s.wires.length > 12 ? 3 : 2, per = Math.ceil(s.wires.length / cols), colW = (R - L) / cols;
     const rowH = Math.min(54, 330 / per);
     s.wires.forEach((w, i) => {
       const x = L + Math.floor(i / per) * colW, y = 256 + (i % per) * rowH;
       const wire = H.session.wires.find((x) => x.id === w.wire);
       g.swatch(x + 14, y - 9, COLOURS[wire.colour] ?? 0xcccccc, 11);
-      g.text(`${w.wire}  ${w.time_s.toFixed(1)} s  ${w.errors} err`, x + 36, y, { size: Math.min(26, rowH * 0.62), colour: w.errors ? '#ffb3b3' : '#e9eef5', max: colW - 44 });
+      g.text(`${w.wire}  ${w.time_s.toFixed(1)} s  ${t('errShort', { n: w.errors })}`, x + 36, y, { size: Math.min(26, rowH * 0.62), colour: w.errors ? '#ffb3b3' : '#e9eef5', max: colW - 44 });
     });
-    g.button('download', 'Download log', L, 620, 290, 76);
-    g.button('vehicle', 'Go to car →', L + 311, 620, 290, 76, { disabled: !vehicle });
-    g.button('again', 'New run', L + 622, 620, 290, 76, { primary: true });
+    g.button('download', t('download'), L, 620, 290, 76);
+    g.button('vehicle', t('goCar'), L + 311, 620, 290, 76, { disabled: !vehicle });
+    g.button('again', t('again'), L + 622, 620, 290, 76, { primary: true });
   },
 };
 
 function refresh() {
   if (!H.session) {
-    panel.draw((g) => header(g, 'FORMBOARD VR', 'Loading harness…'));
+    panel.draw((g) => header(g, 'FORMBOARD VR', t('loadingHarness')));
     return;
   }
   panel.draw(views[H.session.state]);
@@ -607,6 +624,27 @@ function frame() {
   vehicle?.update(t);
   renderer.render(scene, camera);
 }
+
+// Language switch (VR menu or help box): redraw everything that shows text.
+function applyLang() {
+  document.documentElement.lang = getLang();
+  for (const el of document.querySelectorAll('[data-i18n]')) el.innerHTML = t(el.dataset.i18n);
+  for (const b of document.querySelectorAll('[data-lang]')) b.setAttribute('aria-pressed', String(b.dataset.lang === getLang()));
+  const toggle = document.getElementById('info-toggle');
+  if (toggle) {
+    toggle.dataset.show = t('showHelp');
+    toggle.dataset.hide = t('hideHelp');
+    toggle.title = toggle.ariaLabel = t(document.getElementById('info').classList.contains('collapsed') ? 'showHelp' : 'hideHelp');
+  }
+  document.querySelector('#info .lang')?.setAttribute('aria-label', t('language'));
+  refresh();
+  carPanel.redraw();
+  updateVehicleSign();
+  H.board?.relabel();
+}
+onLangChange(applyLang);
+for (const b of document.querySelectorAll('[data-lang]')) b.addEventListener('click', () => setLang(b.dataset.lang));
+applyLang();
 
 renderer.xr.addEventListener('sessionstart', refresh);
 renderer.xr.addEventListener('sessionend', () => { refresh(); fitCamera(); });

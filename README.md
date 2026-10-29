@@ -6,7 +6,7 @@ VR training for wire-harness assembly on a formboard. It runs in the browser on 
 - **On Quest 3:** open the link in the Quest Browser and press *Enter VR*.
   - **Wires and pegs by hand:** pinch the glowing wire end between thumb and index finger, right at the wire (within 3 cm), and pull it through the pegs. The wire end stays at your fingertips. With controllers, the trigger grips at the controller tip.
   - **Buttons:** point at the panel and pinch.
-  - **Moving:** point at the floor, pinch and release to teleport. *Go to car* and *Back to the formboard* jump you there.
+  - **Moving:** point at the floor, pinch and release to teleport. *Go to car* and *Back to the formboard* jump you there. With controllers, the left stick walks freely (relative to where you look) and the right stick turns in 30° steps.
 - **On desktop:** left-click the panel and drag wires on the board. Right-drag to look around, Shift + right-drag or the arrow keys to pan, scroll to zoom. Desktop browsers have no WebXR, so the app runs there without the VR button.
 
 ## What it does

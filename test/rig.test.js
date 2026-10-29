@@ -27,3 +27,12 @@ test('rig: jump turns the view towards the target direction', () => {
   const v = rotate(rotate(viewWorld, -rig.yaw), r.yaw);
   nearAngle(heading(v), heading(dir));
 });
+
+test('rig: turning on the spot keeps the head where it is', () => {
+  const rig = { x: 0.5, z: -1, yaw: 0.2 };
+  const headBase = { x: 0.4, z: 0.3 };
+  const head = world(rig, headBase);
+  const r = placeRig(rig, head, head, rig.yaw - Math.PI / 6);
+  const after = world(r, headBase);
+  near(after.x, head.x); near(after.z, head.z); near(r.yaw, 0.2 - Math.PI / 6);
+});

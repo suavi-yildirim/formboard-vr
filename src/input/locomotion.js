@@ -5,6 +5,9 @@ import { placeRig, yawToFace } from '../core/rig.js';
 
 const FLOOR_LIMIT = 7; // metres from the centre of the room
 const MAX_DISTANCE = 10;
+const WALK_SPEED = 1.4; // m/s at full left-stick deflection
+const DEADZONE = 0.15;
+const SNAP_TURN = Math.PI / 6; // 30° per right-stick flick (snap turning avoids motion sickness)
 
 export class Locomotion {
   constructor(renderer, scene) {
@@ -62,6 +65,44 @@ export class Locomotion {
     const h = this.head();
     const dir = { x: spot.look.x - spot.pos.x, z: spot.look.z - spot.pos.z };
     this.apply(placeRig(this.rig, h.pos, spot.pos, yawToFace(this.rig, h.fwd, dir)));
+  }
+
+  // Controller sticks (Quest: axes 2/3). Left stick walks relative to the view, right stick snap-turns.
+  update(dt, pointers) {
+    if (!this.active) return;
+    for (const p of pointers) {
+      const src = p.inputSource;
+      const axes = src?.gamepad?.axes;
+      if (!axes || axes.length < 4) continue;
+      const x = Math.abs(axes[2]) > DEADZONE ? axes[2] : 0;
+      const y = Math.abs(axes[3]) > DEADZONE ? axes[3] : 0;
+      if (src.handedness === 'left' && (x || y)) this.walk(x, y, dt);
+      if (src.handedness === 'right') {
+        if (!p.turned && Math.abs(x) > 0.7) {
+          this.turn(x > 0 ? -SNAP_TURN : SNAP_TURN);
+          p.turned = true;
+        } else if (Math.abs(x) < 0.3) p.turned = false;
+      }
+    }
+  }
+
+  walk(x, y, dt) {
+    const h = this.head();
+    const len = Math.hypot(h.fwd.x, h.fwd.z) || 1;
+    const f = { x: h.fwd.x / len, z: h.fwd.z / len };
+    const r = { x: -f.z, z: f.x }; // right of the view direction
+    const step = WALK_SPEED * dt;
+    const target = {
+      x: Math.max(-FLOOR_LIMIT, Math.min(FLOOR_LIMIT, h.pos.x + (f.x * -y + r.x * x) * step)),
+      z: Math.max(-FLOOR_LIMIT, Math.min(FLOOR_LIMIT, h.pos.z + (f.z * -y + r.z * x) * step)),
+    };
+    this.apply(placeRig(this.rig, h.pos, target));
+  }
+
+  // Turn on the spot, around the head.
+  turn(angle) {
+    const h = this.head();
+    this.apply(placeRig(this.rig, h.pos, h.pos, this.rig.yaw + angle));
   }
 
   // world = rotate(base, yaw) + rig  =>  base = rotate(world - rig, -yaw)

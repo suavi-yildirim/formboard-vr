@@ -517,6 +517,7 @@ function frame() {
   }
   for (const [x, id] of hover) x.setHover(id);
   loco.showMarker(marker);
+  loco.update(dt, pointers.list);
 
   if (H.session?.state === 'route' && attempt) {
     if (!owner) {

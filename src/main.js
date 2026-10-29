@@ -334,6 +334,7 @@ function onBoardPress(p) {
   }
   if (!best) return;
   H.board.setPeg(best.id, 'set');
+  p.pinchUsed = true; // one peg per pinch
   sfx.snap(); p.pulse(0.5, 30);
   s.setPeg(best.id, now());
   if (s.state === 'route') enterWire();
@@ -468,11 +469,15 @@ function frame() {
     } else {
       const probe = p.tip && H.board ? H.board.probe(p.tip) : null;
       const inside = probe && probe.mm.x > -60 && probe.mm.y > -60 && probe.mm.x < H.board.size.w + 60 && probe.mm.y < H.board.size.h + 60;
-      nearBoard = !!(inside && probe.z > -0.05 && probe.z < 0.2);
-      const touching = inside && probe.z > -0.03 && probe.z < 0.07;
+      // Fingers easily sink into a virtual board (no resistance): accept up to 8 cm behind the surface.
+      nearBoard = !!(inside && probe.z > -0.12 && probe.z < 0.2);
+      const touching = inside && probe.z > -0.08 && probe.z < 0.07;
+      pointers.setTipVisible(p, nearBoard);
       p.work = {
-        mm: touching ? probe.mm : null, pressed: p.pinching, justPressed: p.justPinched && nearBoard,
-        canGrab: p.justPinched && touching, // pick up only where the pinch closes, not by sweeping into the wire
+        mm: touching ? probe.mm : null, pressed: p.pinching,
+        // act only where the pinch closes (plus a short grace period), not by sweeping into a wire
+        justPressed: touching && pointers.pinchFresh(p),
+        canGrab: touching && pointers.pinchFresh(p),
         grab: TIP_GRAB_MM, freeEnd: probe ? probe.local : null,
       };
     }
@@ -524,7 +529,7 @@ function frame() {
       for (const p of pointers.list) {
         if (!p.enabled || !p.work?.canGrab || p.pressOnPanel || p.pressOnFloor) continue;
         handleEvents(attempt.update(p.work.mm, true, p.work.grab), p);
-        if (attempt?.holding) { owner = p; break; }
+        if (attempt?.holding) { owner = p; p.pinchUsed = true; break; }
       }
     } else {
       const p = owner;

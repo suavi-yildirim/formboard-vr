@@ -17,7 +17,7 @@ import { Sfx } from './scene/audio.js';
 import { VehicleView } from './scene/vehicle.js';
 import { Pointers } from './input/pointers.js';
 import { Locomotion } from './input/locomotion.js';
-import { Rope } from './core/rope.js';
+import { heldWire } from './core/heldwire.js';
 import { WIRE_Z } from './scene/wires.js';
 
 const dataUrl = (f) => new URL(`./data/${f}`, import.meta.url);
@@ -247,11 +247,10 @@ function grabPoint() {
 }
 
 // --- the held wire, as a worker holds it: from the last peg to the hand under light tension (a
-// slight sag), the rest of the wire beyond the hand, hanging down (shown up to TAIL_M, as if the
-// rest were coiled in the hand). The total is as long as the wire really is.
-const rope = new Rope(16);
-const tail = new Rope(8);
-const SAG = 1.02; // span length relative to the straight distance: light tension
+// slight sag), the rest of the wire beyond the hand (a short tail, as if coiled in the hand).
+// The shape is computed fresh every frame (core/heldwire.js), so it cannot fold or jitter.
+// The total is as long as the wire really is.
+const SLACK = 1.02; // span length relative to the straight distance: light tension
 const TAIL_M = 0.15;
 let held = null; // { hand, taut, result } while a wire is held
 const HANDLING_MM = 60; // extra length for handling (terminals, crimp ends)
@@ -271,42 +270,33 @@ function handLocal(p) {
 
 function grabRope(p) {
   const start = H.board.local(grabPoint(), WIRE_Z);
-  const hand = handLocal(p) ?? start;
-  rope.reset(start, hand);
-  tail.p = [];
-  held = { hand, taut: false, result: null, tail: null };
+  held = { hand: handLocal(p) ?? start, taut: false, result: null };
 }
 
-// Advance the rope; returns where the wire end is on the board (mm), or null when lifted away.
-function stepRope(p, dt) {
+// Shape the held wire; returns where the wire end is on the board (mm), or null when lifted away.
+function stepRope(p) {
   const w = H.session.wire;
-  const start = H.board.local(grabPoint(), WIRE_Z);
   held.hand = handLocal(p) ?? held.hand;
-  const remaining = Math.max(0.02, (wireLengthMm(w) - polyLen(polylines[w.id].slice(0, attempt.reached))) / 1000);
-  const dist = held.hand.distanceTo(start);
-  const span = Math.min(remaining, dist * SAG + 0.005);
-  const tailLen = Math.min(TAIL_M, remaining - span);
   const q = H.board.group.getWorldQuaternion(new THREE.Quaternion()).invert();
-  const g = new THREE.Vector3(0, -9.81, 0).applyQuaternion(q);
-  const opts = { gravity: g, floorZ: 0.003, bounds: H.board.surfaceSize };
-  const steps = Math.max(1, Math.ceil(dt * 90));
-  for (let i = 0; i < steps; i++) {
-    held.result = rope.step(dt / steps, { ...opts, start, hand: held.hand, length: span });
-    held.tail = tailLen > 0.01 ? tail.step(dt / steps, { ...opts, start: held.result.end, hand: null, length: tailLen }) : null;
-  }
-  if (!held.tail) tail.p = [];
+  held.result = heldWire({
+    start: H.board.local(grabPoint(), WIRE_Z),
+    hand: held.hand,
+    remaining: Math.max(0.02, (wireLengthMm(w) - polyLen(polylines[w.id].slice(0, attempt.reached))) / 1000),
+    gravity: new THREE.Vector3(0, -9.81, 0).applyQuaternion(q),
+    slack: SLACK, tail: TAIL_M, floorZ: 0.003, bounds: H.board.surfaceSize,
+  });
   if (held.result.taut && !held.taut) p.pulse(0.25, 25); // feel the wire go tight
   held.taut = held.result.taut;
   const end = held.result.end;
   return end.z > -0.08 && end.z < 0.12 ? H.board.localToMm(end) : null;
 }
 
-// Live wire = routed part (bundle-offset points) plus, while held, the simulated free part.
+// Live wire = routed part (bundle-offset points) plus, while held, the free part and its tail.
 function updateLive() {
   const w = H.session.wire;
   const routed = polylines[w.id].slice(0, attempt.reached);
   if (attempt.holding && held?.result) {
-    H.wires.setLiveRope(w, routed, held.tail ? [...held.result.points, ...held.tail.points.slice(1)] : held.result.points);
+    H.wires.setLiveRope(w, routed, [...held.result.points, ...held.result.tail]);
     const e = held.result.end;
     H.wires.setHandle(w, null, true, new THREE.Vector3(e.x, e.y, e.z));
     return;
@@ -599,7 +589,7 @@ function frame() {
       if (p.enabled) p.lostAt = null; else p.lostAt ??= now();
       const holding = p.enabled ? p.work.pressed : now() - p.lostAt < 300;
       // the router follows the wire's real end, which stops short of the hand when the wire is taut
-      const endMm = holding ? stepRope(p, dt) : null;
+      const endMm = holding ? stepRope(p) : null;
       const events = attempt.update(endMm, holding, p.work.grab);
       if (!attempt.holding) owner = null;
       handleEvents(events, p);

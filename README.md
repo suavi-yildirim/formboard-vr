@@ -19,7 +19,7 @@ VR training for wire-harness assembly on a formboard. It runs in the browser on 
    - The wire snaps to the next correct peg, with sound and haptic feedback.
    - A wrong branch or a skipped peg flashes red and counts as an error. Passing near other pegs while staying on track does not.
    - Reaching the target connector completes the wire, and earlier wires fade back.
-   - **The wire behaves like a wire,** held the way a worker holds it. From the last peg to your hand it runs under light tension, with a slight sag. The rest of the wire hangs beyond your hand (shown as a short tail, as if coiled in the hand), so it never spreads across the board. Both parts are a small rope simulation that rests on the board. The total is exactly as long as the wire really is, taken from the KBL file. For the VW harness the KBL lengths equal the flattened board paths, to the millimetre. Pull further than the wire reaches and it goes taut: the end stops short of your hand, and a controller gives a short buzz.
+   - **The wire behaves like a wire,** held the way a worker holds it. From the last peg to your hand it runs under light tension, with a slight sag. The rest of the wire hangs beyond your hand (shown as a short tail, as if coiled in the hand), so it never spreads across the board. The shape is computed fresh every frame (no simulation state), so it cannot fold or jitter, and it never goes through the board. The total is exactly as long as the wire really is, taken from the KBL file. For the VW harness the KBL lengths equal the flattened board paths, to the millimetre. Pull further than the wire reaches and it goes taut: the end stops short of your hand, and a controller gives a short buzz.
 4. **Two modes.**
    - **Guided** shows the path and the next peg.
    - **Test** shows only the target connector, so you route from the board drawing. Hints ("Show me") are counted.
@@ -50,7 +50,7 @@ Data in this repository:
 ## Structure
 
 ```
-src/core/    pure logic, unit tested: grid, harness (variants, bundles), router (snap/wrong/done), session (state machine, metrics), rope (wire physics), rig (teleport maths)
+src/core/    pure logic, unit tested: grid, harness (variants, bundles), router (snap/wrong/done), session (state machine, metrics), heldwire (shape of the held wire), rig (teleport maths)
 src/scene/   three.js: workshop, board, wires, panel, audio
 src/input/   one pointer model for hands, controllers and mouse
 tools/       KBL -> harness.json

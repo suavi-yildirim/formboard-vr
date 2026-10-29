@@ -1,0 +1,30 @@
+{
+  "_comment": "Fictitious formboard layout for the demo door harness. Cells: column letter A-X (left to right), row 1-16 (bottom to top). Pegs are guide/fork pegs, branches are Y-pegs at bundle splits.",
+  "board": { "cols": 24, "rows": 16, "pitch_mm": 50 },
+  "nodes": [
+    { "id": "X1", "cell": "B9",  "kind": "connector" },
+    { "id": "P1", "cell": "E9",  "kind": "peg" },
+    { "id": "X2", "cell": "H9",  "kind": "connector" },
+    { "id": "P2", "cell": "J9",  "kind": "peg" },
+    { "id": "N1", "cell": "L9",  "kind": "branch" },
+    { "id": "P3", "cell": "L6",  "kind": "peg" },
+    { "id": "X3", "cell": "L3",  "kind": "connector" },
+    { "id": "P4", "cell": "O9",  "kind": "peg" },
+    { "id": "N2", "cell": "Q9",  "kind": "branch" },
+    { "id": "P5", "cell": "Q12", "kind": "peg" },
+    { "id": "X4", "cell": "Q15", "kind": "connector" },
+    { "id": "P6", "cell": "T9",  "kind": "peg" },
+    { "id": "X5", "cell": "W9",  "kind": "connector" },
+    { "id": "P7", "cell": "S6",  "kind": "peg" },
+    { "id": "X6", "cell": "U3",  "kind": "connector" }
+  ],
+  "segments": [
+    ["X1", "P1"], ["P1", "X2"],
+    ["X2", "P2"], ["P2", "N1"],
+    ["N1", "P3"], ["P3", "X3"],
+    ["N1", "P4"], ["P4", "N2"],
+    ["N2", "P5"], ["P5", "X4"],
+    ["N2", "P6"], ["P6", "X5"],
+    ["N2", "P7"], ["P7", "X6"]
+  ]
+}

@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  FIKTIVER Türleitungssatz vorne links, KBL-ähnlich (stark vereinfacht, kein echtes VDA-4964-Schema).
+  Alle IDs, Sachnummern und Werte sind erfunden.
+  Absichtlich eingebaute Fehler (findet run_queries.py):
+    - W05 ist mit 0,35 mm² zu dünn für den Fensterhebermotor
+    - C10 trägt den Signalnamen "AMB_LED_PWN" (Tippfehler, E/E-Modell kennt "AMB_LED_PWM")
+    - Das Signal SP_HEIZ (Spiegelheizung) ist im Leitungssatz gar nicht verlegt
+-->
+<KBL_container version_id="demo-0.1">
+  <Harness id="H_TVL" part_number="DEMO-4711" description="Türleitungssatz vorne links">
+
+    <Connector_occurrence id="X1" part_number="DEMO-CON-12" description="Türübergang (Karosserie)">
+      <Contact_point id="X1.1" cavity="1"/><Contact_point id="X1.2" cavity="2"/>
+      <Contact_point id="X1.3" cavity="3"/>
+    </Connector_occurrence>
+    <Connector_occurrence id="X2" part_number="DEMO-CON-16" description="Türsteuergerät">
+      <Contact_point id="X2.1" cavity="1"/><Contact_point id="X2.2" cavity="2"/>
+      <Contact_point id="X2.3" cavity="3"/><Contact_point id="X2.4" cavity="4"/>
+      <Contact_point id="X2.5" cavity="5"/><Contact_point id="X2.6" cavity="6"/>
+      <Contact_point id="X2.7" cavity="7"/><Contact_point id="X2.8" cavity="8"/>
+      <Contact_point id="X2.9" cavity="9"/><Contact_point id="X2.10" cavity="10"/>
+      <Contact_point id="X2.11" cavity="11"/><Contact_point id="X2.12" cavity="12"/>
+    </Connector_occurrence>
+    <Connector_occurrence id="X3" part_number="DEMO-CON-02" description="Fensterhebermotor">
+      <Contact_point id="X3.1" cavity="1"/><Contact_point id="X3.2" cavity="2"/>
+    </Connector_occurrence>
+    <Connector_occurrence id="X4" part_number="DEMO-CON-04" description="Außenspiegel">
+      <Contact_point id="X4.1" cavity="1"/><Contact_point id="X4.2" cavity="2"/>
+      <Contact_point id="X4.3" cavity="3"/>
+    </Connector_occurrence>
+    <Connector_occurrence id="X5" part_number="DEMO-CON-02" description="Türschloss">
+      <Contact_point id="X5.1" cavity="1"/><Contact_point id="X5.2" cavity="2"/>
+    </Connector_occurrence>
+    <Connector_occurrence id="X6" part_number="DEMO-CON-02" description="Ambiente-LED">
+      <Contact_point id="X6.1" cavity="1"/><Contact_point id="X6.2" cavity="2"/>
+    </Connector_occurrence>
+
+    <!-- Leitungen: Querschnitt in mm², Länge in mm, Farbe nach DIN-Kürzel -->
+    <Wire_occurrence id="W01" cross_section_mm2="2.5"  length_mm="1450" colour="RD"/>
+    <Wire_occurrence id="W02" cross_section_mm2="2.5"  length_mm="1450" colour="BN"/>
+    <Wire_occurrence id="W03" cross_section_mm2="0.35" length_mm="1450" colour="VT"/>
+    <Wire_occurrence id="W04" cross_section_mm2="1.5"  length_mm="620"  colour="BU"/>
+    <Wire_occurrence id="W05" cross_section_mm2="0.35" length_mm="620"  colour="GY"/>
+    <Wire_occurrence id="W06" cross_section_mm2="0.5"  length_mm="540"  colour="GN"/>
+    <Wire_occurrence id="W07" cross_section_mm2="0.5"  length_mm="540"  colour="BN"/>
+    <Wire_occurrence id="W08" cross_section_mm2="0.75" length_mm="480"  colour="YE"/>
+    <Wire_occurrence id="W09" cross_section_mm2="0.75" length_mm="480"  colour="BN"/>
+    <Wire_occurrence id="W10" cross_section_mm2="0.35" length_mm="900"  colour="WH"/>
+    <Wire_occurrence id="W11" cross_section_mm2="0.35" length_mm="900"  colour="BN"/>
+    <Wire_occurrence id="W12" cross_section_mm2="0.35" length_mm="540"  colour="OG"/>
+
+    <!-- Verbindungen: welche Leitung verbindet welche Kontaktstellen, mit welchem Signal -->
+    <Connection id="C01" wire="W01" signal_name="KL30_TSG"><Extremity contact_point="X1.1"/><Extremity contact_point="X2.1"/></Connection>
+    <Connection id="C02" wire="W02" signal_name="KL31"><Extremity contact_point="X1.2"/><Extremity contact_point="X2.2"/></Connection>
+    <Connection id="C03" wire="W03" signal_name="LIN_TUER"><Extremity contact_point="X1.3"/><Extremity contact_point="X2.3"/></Connection>
+    <Connection id="C04" wire="W04" signal_name="FH_MOT_PLUS"><Extremity contact_point="X2.4"/><Extremity contact_point="X3.1"/></Connection>
+    <Connection id="C05" wire="W05" signal_name="FH_MOT_MINUS"><Extremity contact_point="X2.5"/><Extremity contact_point="X3.2"/></Connection>
+    <Connection id="C06" wire="W06" signal_name="SP_VERST"><Extremity contact_point="X2.6"/><Extremity contact_point="X4.1"/></Connection>
+    <Connection id="C07" wire="W07" signal_name="KL31"><Extremity contact_point="X2.7"/><Extremity contact_point="X4.2"/></Connection>
+    <Connection id="C08" wire="W08" signal_name="ZV_MOT"><Extremity contact_point="X2.8"/><Extremity contact_point="X5.1"/></Connection>
+    <Connection id="C09" wire="W09" signal_name="KL31"><Extremity contact_point="X2.9"/><Extremity contact_point="X5.2"/></Connection>
+    <Connection id="C10" wire="W10" signal_name="AMB_LED_PWN"><Extremity contact_point="X2.10"/><Extremity contact_point="X6.1"/></Connection>
+    <Connection id="C11" wire="W11" signal_name="KL31"><Extremity contact_point="X2.11"/><Extremity contact_point="X6.2"/></Connection>
+    <Connection id="C12" wire="W12" signal_name="SP_POS"><Extremity contact_point="X2.12"/><Extremity contact_point="X4.3"/></Connection>
+
+    <!-- Module (Variantenbausteine) -->
+    <Module id="M_BASIS" description="Basis">
+      <Controlled_component ref="W01"/><Controlled_component ref="W02"/><Controlled_component ref="W03"/>
+      <Controlled_component ref="W04"/><Controlled_component ref="W05"/><Controlled_component ref="W06"/>
+      <Controlled_component ref="W07"/><Controlled_component ref="W08"/><Controlled_component ref="W09"/>
+    </Module>
+    <Module id="M_KOMFORT" description="Komfort (Spiegel-Memory, Spiegelheizung)">
+      <Controlled_component ref="W12"/>
+    </Module>
+    <Module id="M_AMBIENTE" description="Ambientebeleuchtung">
+      <Controlled_component ref="W10"/><Controlled_component ref="W11"/>
+    </Module>
+  </Harness>
+</KBL_container>

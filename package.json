@@ -1,0 +1,6 @@
+{
+  "name": "formboard-vr",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test test/*.test.js", "data": "python3 tools/kbl_to_harness.py" }
+}

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Formboard VR</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #1b1f26; font-family: system-ui, -apple-system, sans-serif; }
+    #info { position: absolute; bottom: 16px; right: 16px; max-width: 300px; padding: 10px 14px; border-radius: 12px;
+            background: rgba(14,18,25,0.82); color: #e9eef5; font-size: 13px; line-height: 1.4; pointer-events: none; }
+    @media (max-width: 700px) { #info { display: none; } }
+    #info b { color: #5ce1ff; }
+    #info p { margin: 6px 0 0; color: #c5ceda; }
+  </style>
+  <script type="importmap">
+    { "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    } }
+  </script>
+</head>
+<body>
+  <div id="info">
+    <b>Formboard VR</b> · wire harness assembly training
+    <p>On Quest 3: press <i>Enter VR</i>, then point and pinch (or trigger).</p>
+    <p>On desktop: left-click the panel and drag wires on the board · right-drag to look around · scroll to zoom.</p>
+  </div>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

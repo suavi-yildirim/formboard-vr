@@ -26,15 +26,22 @@ export function buildWorkshop(scene) {
   scene.background = new THREE.Color(0x1b1f26);
   scene.fog = new THREE.Fog(0x1b1f26, 6, 14);
 
-  scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x2a2622, 1.1));
-  const key = new THREE.DirectionalLight(0xffffff, 1.6);
-  key.position.set(1.5, 3, 1.2);
-  scene.add(key);
+  scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x2a2622, 0.5));
+  // Overhead work light: the only shadow caster, its shadow box fitted tightly around the board.
+  const key = new THREE.DirectionalLight(0xfff4e6, 1.5);
+  key.position.set(0.6, 2.8, 0.9);
+  key.castShadow = true;
+  key.shadow.mapSize.set(1024, 1024);
+  Object.assign(key.shadow.camera, { left: -0.7, right: 0.7, top: 0.7, bottom: -0.7, near: 1, far: 5 });
+  key.shadow.bias = -0.0004;
+  key.shadow.normalBias = 0.01;
+  scene.add(key, key.target);
   const fill = new THREE.PointLight(0x9fd0ff, 6, 4);
   fill.position.set(-1, 2.2, -0.2);
   scene.add(fill);
 
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), new THREE.MeshStandardMaterial({ map: floorTexture(), roughness: 0.9 }));
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), new THREE.MeshStandardMaterial({ map: floorTexture(), roughness: 0.75 }));
+  floor.receiveShadow = true;
   floor.rotation.x = -Math.PI / 2;
   scene.add(floor);
 
@@ -55,6 +62,7 @@ export function buildWorkshop(scene) {
   // Workbench in front of the board.
   const bench = new THREE.Group();
   const plate = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.04, 0.5), top);
+  plate.receiveShadow = true;
   plate.position.y = 0.72;
   bench.add(plate);
   for (const [x, z] of [[-0.75, -0.2], [0.75, -0.2], [-0.75, 0.2], [0.75, 0.2]]) {
@@ -86,5 +94,5 @@ export function buildWorkshop(scene) {
   rack.rotation.y = 0.5;
   scene.add(rack);
 
-  return { metal };
+  return { metal, key };
 }

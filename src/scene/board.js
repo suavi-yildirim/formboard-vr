@@ -37,6 +37,15 @@ export class Board {
     return { mm: { x: (l.x + this.size.w / 2000) * 1000, y: (l.y + this.size.h / 2000) * 1000 }, z: l.z, local: l };
   }
 
+  localToMm(l) {
+    return { x: (l.x + this.size.w / 2000) * 1000, y: (l.y + this.size.h / 2000) * 1000 };
+  }
+
+  // Board surface in metres (grid plus margin), for resting wires on it.
+  get surfaceSize() {
+    return { w: (this.size.w + 2 * MARGIN_MM) / 1000, h: (this.size.h + 2 * MARGIN_MM) / 1000 };
+  }
+
   // World point on the surface -> board mm, or null when off the grid area (with margin).
   toMm(world) {
     const l = this.group.worldToLocal(world.clone());
@@ -45,6 +54,7 @@ export class Board {
     return p;
   }
 
+  // Plywood board with the 1:1 formboard drawing printed on paper and glued on, as in harness shops.
   buildSurface() {
     const { w, h } = this.size;
     const W = w + 2 * MARGIN_MM, H = h + 2 * MARGIN_MM;
@@ -56,22 +66,22 @@ export class Board {
     const X = (mm) => (mm + MARGIN_MM) * s;
     const Y = (mm) => (h - mm + MARGIN_MM) * s;
 
-    g.fillStyle = '#e8eaed';
-    g.fillRect(0, 0, c.width, c.height);
-    // perforation every 25 mm
-    g.fillStyle = '#b4bac3';
-    for (let x = 12.5; x < w; x += 25) for (let y = 12.5; y < h; y += 25) {
-      g.beginPath(); g.arc(X(x), Y(y), 2.6 * s, 0, Math.PI * 2); g.fill();
-    }
-    // grid lines at cell borders
-    g.strokeStyle = '#c9ced6';
+    woodGrain(g, c.width, c.height);
+    // paper sheet with a soft shadow edge
+    const inset = 8;
+    g.fillStyle = 'rgba(60,40,20,0.25)';
+    g.fillRect(X(-MARGIN_MM + inset) + 3, Y(h + MARGIN_MM - inset) + 3, (W - 2 * inset) * s, (H - 2 * inset) * s);
+    g.fillStyle = '#e4ddcb';
+    g.fillRect(X(-MARGIN_MM + inset), Y(h + MARGIN_MM - inset), (W - 2 * inset) * s, (H - 2 * inset) * s);
+
+    // grid at cell borders
+    g.strokeStyle = '#cfc6af';
     g.lineWidth = 1.2;
     const p = this.h.board.pitch_mm;
     for (let x = 0; x <= w; x += p) { g.beginPath(); g.moveTo(X(x), Y(0)); g.lineTo(X(x), Y(h)); g.stroke(); }
     for (let y = 0; y <= h; y += p) { g.beginPath(); g.moveTo(X(0), Y(y)); g.lineTo(X(w), Y(y)); g.stroke(); }
-    // grid labels in the margin
-    g.fillStyle = '#3d5a80';
-    g.font = `bold ${16 * s}px system-ui, sans-serif`;
+    g.fillStyle = '#5a6472';
+    g.font = `600 ${14 * s}px system-ui, sans-serif`;
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     for (let col = 0; col < this.h.board.cols; col++) {
@@ -82,40 +92,58 @@ export class Board {
       g.fillText(String(row + 1), X(-MARGIN_MM / 2), Y((row + 0.5) * p));
       g.fillText(String(row + 1), X(w + MARGIN_MM / 2), Y((row + 0.5) * p));
     }
-    // 1:1 formboard drawing: bundle segments and node names, as glued onto real boards
-    g.strokeStyle = 'rgba(61,90,128,0.35)';
+    // drawing: bundle outline (light band) with its centre line, as on a printed formboard drawing
     g.lineCap = 'round';
-    g.lineWidth = 14 * s;
-    for (const [a, b] of this.h.segments) {
-      g.beginPath(); g.moveTo(X(this.pos[a].x), Y(this.pos[a].y)); g.lineTo(X(this.pos[b].x), Y(this.pos[b].y)); g.stroke();
+    for (const [lw, col] of [[12 * s, 'rgba(60,80,110,0.22)'], [2.2 * s, '#26303c']]) {
+      g.strokeStyle = col;
+      g.lineWidth = lw;
+      for (const [a, b] of this.h.segments) {
+        g.beginPath(); g.moveTo(X(this.pos[a].x), Y(this.pos[a].y)); g.lineTo(X(this.pos[b].x), Y(this.pos[b].y)); g.stroke();
+      }
     }
-    g.fillStyle = '#3d5a80';
-    g.font = `${11 * s}px system-ui, sans-serif`;
+    // connector outlines with their ids, peg crosses and names
+    g.strokeStyle = '#2f3a48';
+    g.lineWidth = 1.2 * s;
+    g.fillStyle = '#2f3a48';
+    g.font = `600 ${10 * s}px system-ui, sans-serif`;
     for (const n of this.h.nodes) {
-      if (n.kind === 'connector') continue;
+      const q = this.pos[n.id];
+      if (n.kind === 'connector') {
+        g.strokeRect(X(q.x) - 9 * s, Y(q.y) - 7 * s, 18 * s, 14 * s);
+        continue;
+      }
+      g.beginPath(); g.moveTo(X(q.x) - 5 * s, Y(q.y)); g.lineTo(X(q.x) + 5 * s, Y(q.y)); g.moveTo(X(q.x), Y(q.y) - 5 * s); g.lineTo(X(q.x), Y(q.y) + 5 * s); g.stroke();
       if (n.kind === 'peg' && this.dense) continue;
-      g.fillText(n.cell ? `${n.id} · ${n.cell}` : n.id, X(this.pos[n.id].x), Y(this.pos[n.id].y - 22));
+      g.fillText(n.cell ? `${n.id} · ${n.cell}` : n.id, X(q.x), Y(q.y - 16));
     }
     g.textAlign = 'left';
-    g.font = `bold ${13 * s}px system-ui, sans-serif`;
-    g.fillText(`${this.h.id} · ${this.h.description} · formboard 1:1`, X(8), Y(h - 14));
+    g.font = `bold ${12 * s}px system-ui, sans-serif`;
+    g.fillText(`${this.h.id} · ${this.h.description} · formboard 1:1`, X(4), Y(h - 12));
     if (this.h.source) {
-      g.font = `${10 * s}px system-ui, sans-serif`;
-      g.fillText(this.h.source, X(8), Y(10));
+      g.font = `${9 * s}px system-ui, sans-serif`;
+      g.fillText(this.h.source, X(4), Y(8));
     }
 
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = 4;
-    this.surface = new THREE.Mesh(new THREE.PlaneGeometry(W / 1000, H / 1000), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 }));
+    tex.anisotropy = 8;
+    this.surface = new THREE.Mesh(new THREE.PlaneGeometry(W / 1000, H / 1000), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, envMapIntensity: 0.4 }));
+    this.surface.receiveShadow = true;
     this.group.add(this.surface);
   }
 
   buildFrame() {
     const { w, h } = this.size;
     const W = (w + 2 * MARGIN_MM) / 1000, H = (h + 2 * MARGIN_MM) / 1000;
-    const back = new THREE.Mesh(new THREE.BoxGeometry(W + 0.03, H + 0.03, 0.025), new THREE.MeshStandardMaterial({ color: 0x30363f, roughness: 0.7 }));
+    const c = document.createElement('canvas');
+    c.width = 512; c.height = 128;
+    woodGrain(c.getContext('2d'), 512, 128, '#8a6239');
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const wood = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.75 });
+    const back = new THREE.Mesh(new THREE.BoxGeometry(W + 0.03, H + 0.03, 0.025), wood);
     back.position.z = -0.0126;
+    back.castShadow = back.receiveShadow = true;
     this.group.add(back);
     // Rear struts down to the bench, so the tilted board does not float.
     for (const x of [-W / 2 + 0.15, W / 2 - 0.15]) {
@@ -126,23 +154,21 @@ export class Board {
     }
   }
 
+  // Connectors as their KBL parts look: housings with cavities and a latch, rubber spark-plug
+  // boots, copper ring lugs, heat-shrunk splices. The wire side faces the bundle.
   buildConnectors() {
     this.connectors = {};
-    const body = this.dense ? new THREE.BoxGeometry(0.03, 0.022, 0.022) : new THREE.BoxGeometry(0.05, 0.035, 0.026);
     for (const n of this.h.nodes.filter((x) => x.kind === 'connector')) {
-      const grp = new THREE.Group();
-      const mesh = new THREE.Mesh(body, new THREE.MeshStandardMaterial({ color: 0x2b2f36, roughness: 0.5 }));
-      mesh.position.z = 0.015;
-      grp.add(mesh);
-      const holder = new THREE.Mesh(this.dense ? new THREE.BoxGeometry(0.04, 0.008, 0.026) : new THREE.BoxGeometry(0.09, 0.012, 0.035), this.metal);
-      holder.position.set(0, this.dense ? -0.016 : -0.03, this.dense ? 0.013 : 0.017);
-      grp.add(holder);
-      const label = makeLabel(this.dense ? n.id : `${n.id}  ${n.label}`, this.dense ? 0.07 : 0.16);
-      label.position.set(0, this.dense ? 0.028 : 0.05, 0.04);
-      grp.add(label);
+      const grp = connectorModel(n, this.dense, this.metal);
       grp.position.copy(this.local(this.pos[n.id]));
+      grp.rotation.z = this.segmentAngle(n.id) + Math.PI; // front away from the wires
+      grp.traverse((o) => { if (o.isMesh) o.castShadow = true; });
       this.group.add(grp);
-      this.connectors[n.id] = { grp, mesh };
+      const label = makeLabel(this.dense ? n.id : `${n.id}  ${n.label}`, this.dense ? 0.07 : 0.16);
+      label.position.copy(this.local(this.pos[n.id], 0.045));
+      label.position.y += this.dense ? 0.022 : 0.035;
+      this.group.add(label);
+      this.connectors[n.id] = { grp };
     }
   }
 
@@ -156,6 +182,9 @@ export class Board {
     for (const n of this.h.nodes.filter((x) => x.kind !== 'connector')) {
       const set = new THREE.Group();
       set.add(new THREE.Mesh(post, this.metal));
+      const washer = new THREE.Mesh(WASHER, this.metal);
+      washer.position.z = 0.001;
+      set.add(washer);
       const dir = this.segmentAngle(n.id);
       for (const s of [-1, 1]) {
         const m = new THREE.Mesh(prong, this.metal);
@@ -167,6 +196,7 @@ export class Board {
         c.position.z = PEG_H + 0.012;
         set.add(c);
       }
+      set.traverse((o) => { if (o.isMesh) o.castShadow = true; });
       const ghost = set.clone();
       ghost.traverse((o) => { if (o.isMesh) o.material = this.ghostMat; });
 
@@ -246,6 +276,77 @@ export class Board {
   }
 }
 
+const WASHER = new THREE.CylinderGeometry(0.009, 0.009, 0.002, 20).rotateX(Math.PI / 2);
+
+function woodGrain(g, w, h, base = '#c49a6c') {
+  g.fillStyle = base;
+  g.fillRect(0, 0, w, h);
+  for (let i = 0; i < h / 2; i++) {
+    const y = Math.random() * h, a = 0.04 + Math.random() * 0.08;
+    g.strokeStyle = Math.random() < 0.5 ? `rgba(90,55,25,${a})` : `rgba(255,230,190,${a})`;
+    g.lineWidth = 0.5 + Math.random() * 2.5;
+    g.beginPath();
+    g.moveTo(0, y);
+    for (let x = 0; x <= w; x += w / 8) g.lineTo(x, y + Math.sin(x / w * 6 + i) * 3);
+    g.stroke();
+  }
+}
+
+const HOUSING = { BK: 0x1d1f22, WH: 0xe8e8e2, GY: 0x8d9298, BN: 0x6b4428, BU: 0x2a5aa8, GN: 0x2f7d45, RD: 0xa52a2a, YE: 0xd9b52a, NT: 0xe2d6b8, VT: 0x6d3e91 };
+
+// One connector, in its own frame: wires enter at the origin from -x, the front faces +x.
+function connectorModel(n, dense, metal) {
+  const grp = new THREE.Group();
+  const k = dense ? 1 : 1.5;
+  const plastic = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.55 });
+  if (n.shape === 'ring') {
+    const lug = new THREE.Mesh(new THREE.TorusGeometry(0.006, 0.0018, 10, 24), new THREE.MeshStandardMaterial({ color: 0xc58b52, metalness: 0.9, roughness: 0.3 }));
+    lug.position.set(0.016, 0, 0.004);
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.0025, 0.0025, 0.01, 12).rotateZ(Math.PI / 2), lug.material);
+    barrel.position.set(0.005, 0, 0.004);
+    grp.add(lug, barrel);
+    return grp;
+  }
+  if (n.shape === 'splice') {
+    const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.022, 16).rotateZ(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x15171a, roughness: 0.35 }));
+    sleeve.position.set(0.006, 0, 0.012);
+    grp.add(sleeve);
+    return grp;
+  }
+  if (n.shape === 'boot') {
+    const rubber = new THREE.MeshStandardMaterial({ color: 0x1a1a1c, roughness: 0.85 });
+    const boot = new THREE.Mesh(new THREE.CylinderGeometry(0.0065, 0.005, 0.03, 20).rotateZ(Math.PI / 2), rubber);
+    boot.position.set(0.016, 0, 0.012);
+    const mouth = new THREE.Mesh(new THREE.CylinderGeometry(0.0075, 0.0075, 0.006, 20).rotateZ(Math.PI / 2), rubber);
+    mouth.position.set(0.032, 0, 0.012);
+    grp.add(boot, mouth);
+    return grp;
+  }
+  // housing: width from the cavity count, cavities on the front, latch on top, metal holder below
+  const cav = n.cavities ?? 2, rows = cav > 6 ? 2 : 1, perRow = Math.ceil(cav / rows);
+  const wy = Math.max(0.012, perRow * 0.0045 + 0.005) * k, hz = (rows === 2 ? 0.016 : 0.012) * k, dx = 0.022 * k;
+  const body = new THREE.Mesh(new THREE.BoxGeometry(dx, wy, hz), plastic(HOUSING[n.housing_colour] ?? HOUSING.BK));
+  body.position.set(dx / 2, 0, hz / 2 + 0.004);
+  grp.add(body);
+  const hole = new THREE.BoxGeometry(0.001, 0.0024 * k, 0.0024 * k);
+  const holeMat = new THREE.MeshBasicMaterial({ color: 0x050505 });
+  const holes = new THREE.InstancedMesh(hole, holeMat, cav);
+  const m = new THREE.Matrix4();
+  for (let i = 0; i < cav; i++) {
+    const r = Math.floor(i / perRow), j = i % perRow;
+    m.makeTranslation(dx + 0.0003, (j - (perRow - 1) / 2) * 0.0045 * k, 0.004 + hz / 2 + (rows === 2 ? (r - 0.5) * 0.006 * k : 0));
+    holes.setMatrixAt(i, m);
+  }
+  grp.add(holes);
+  const latch = new THREE.Mesh(new THREE.BoxGeometry(dx * 0.45, wy * 0.35, 0.002 * k), body.material);
+  latch.position.set(dx * 0.6, 0, hz + 0.005);
+  grp.add(latch);
+  const holder = new THREE.Mesh(new THREE.BoxGeometry(dx * 1.1, wy + 0.006, 0.004), metal);
+  holder.position.set(dx / 2, 0, 0.002);
+  grp.add(holder);
+  return grp;
+}
+
 function makeLabel(text, width = 0.16) {
   const c = document.createElement('canvas');
   c.width = 512; c.height = 96;
@@ -258,7 +359,7 @@ function makeLabel(text, width = 0.16) {
   g.fillText(text, 256, 50, 480);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false }));
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false, toneMapped: false }));
   s.scale.set(width, width * 0.1875, 1);
   return s;
 }

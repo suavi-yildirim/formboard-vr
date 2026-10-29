@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { validateHarness, variants, wiresForVariant, nodePositions, bundleSlots, wirePolyline, nodeById, COLOURS, COLOUR_NAMES } from './core/harness.js';
 import { distance } from './core/grid.js';
 import { RoutingAttempt, GRAB_MM, neighbourMap } from './core/router.js';
@@ -16,6 +17,8 @@ import { Sfx } from './scene/audio.js';
 import { VehicleView } from './scene/vehicle.js';
 import { Pointers } from './input/pointers.js';
 import { Locomotion } from './input/locomotion.js';
+import { Rope } from './core/rope.js';
+import { WIRE_Z } from './scene/wires.js';
 
 const dataUrl = (f) => new URL(`./data/${f}`, import.meta.url);
 const getJson = async (f) => (await fetch(dataUrl(f))).json();
@@ -26,6 +29,10 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.xr.enabled = true;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.9;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.xr.setFoveation?.(0.5);
 document.body.appendChild(renderer.domElement);
 // Without immersive VR support (desktop browsers, Safari) show a plain note instead of the
@@ -73,7 +80,9 @@ function setView(v) {
 }
 backButton.addEventListener('click', () => setView('board'));
 
-const { metal } = buildWorkshop(scene);
+const { metal, key } = buildWorkshop(scene);
+// Soft studio reflections for metal, plastic and insulation (computed once, no download).
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
 const panel = new Panel();
 panel.mesh.position.set(-0.82, 1.28, -0.3);
 panel.mesh.rotation.y = 0.6;
@@ -150,6 +159,7 @@ async function loadHarness(i) {
   const tilt = 0.7, heightM = H.board.size.h / 1000 + 0.09;
   H.board.group.position.set(0, 0.765 + (heightM / 2) * Math.cos(tilt), -0.48);
   H.board.group.rotation.x = -tilt;
+  key.target.position.copy(H.board.group.position);
   scene.add(H.board.group);
   H.wires = new WireLayer(H.board);
   ui.harnessIdx = i;
@@ -236,20 +246,62 @@ function grabPoint() {
   return polylines[H.session.wire.id][attempt.reached - 1];
 }
 
-// Live wire = routed part (bundle-offset points) plus the free end while held: at the fingertips
-// in VR (freeEnd, board-local 3D point), on the board under the mouse on desktop (pointerMm).
-function updateLive(pointerMm, freeEnd) {
+// --- the held wire: a rope from the last peg to the hand, as long as the wire really is ---
+const rope = new Rope(16);
+let held = null; // { hand, taut, result } while a wire is held
+const HANDLING_MM = 60; // extra length for handling (terminals, crimp ends)
+const polyLen = (pts) => pts.slice(1).reduce((sum, q, i) => sum + distance(pts[i], q), 0);
+
+// Wire length on the board: the KBL length (VW: equal to the flattened path), kept plausible for
+// the fictitious harness (between the path length and 1.6 times it).
+function wireLengthMm(w) {
+  const path = polyLen(polylines[w.id]);
+  return Math.min(Math.max(w.length_mm || path, path), path * 1.6) + HANDLING_MM;
+}
+
+function handLocal(p) {
+  if (p === pointers.mouse) return p.work.mm ? H.board.local(p.work.mm, 0.04) : null;
+  return p.work.freeEnd;
+}
+
+function grabRope(p) {
+  const start = H.board.local(grabPoint(), WIRE_Z);
+  const hand = handLocal(p) ?? start;
+  rope.reset(start, hand);
+  held = { hand, taut: false, result: null };
+}
+
+// Advance the rope; returns where the wire end is on the board (mm), or null when lifted away.
+function stepRope(p, dt) {
+  const w = H.session.wire;
+  const start = H.board.local(grabPoint(), WIRE_Z);
+  held.hand = handLocal(p) ?? held.hand;
+  const length = Math.max(0.02, (wireLengthMm(w) - polyLen(polylines[w.id].slice(0, attempt.reached))) / 1000);
+  const q = H.board.group.getWorldQuaternion(new THREE.Quaternion()).invert();
+  const g = new THREE.Vector3(0, -9.81, 0).applyQuaternion(q);
+  const steps = Math.max(1, Math.ceil(dt * 90));
+  for (let i = 0; i < steps; i++) {
+    held.result = rope.step(dt / steps, { start, hand: held.hand, length, gravity: g, floorZ: 0.003, bounds: H.board.surfaceSize });
+  }
+  if (held.result.taut && !held.taut) p.pulse(0.25, 25); // feel the wire go tight
+  held.taut = held.result.taut;
+  const end = held.result.end;
+  return end.z > -0.08 && end.z < 0.12 ? H.board.localToMm(end) : null;
+}
+
+// Live wire = routed part (bundle-offset points) plus, while held, the simulated free part.
+function updateLive() {
   const w = H.session.wire;
   const routed = polylines[w.id].slice(0, attempt.reached);
-  if (attempt.holding && freeEnd) {
-    H.wires.setLive(w, routed, freeEnd);
-    H.wires.setHandle(w, null, true, freeEnd);
+  if (attempt.holding && held?.result) {
+    H.wires.setLiveRope(w, routed, held.result.points);
+    const e = held.result.end;
+    H.wires.setHandle(w, null, true, new THREE.Vector3(e.x, e.y, e.z));
     return;
   }
-  const pts = attempt.holding && pointerMm ? [...routed, pointerMm] : routed;
-  if (pts.length >= 2) H.wires.setLive(w, pts);
+  if (routed.length >= 2) H.wires.setLive(w, routed);
   else H.wires.clearLive();
-  H.wires.setHandle(w, attempt.holding && pointerMm ? pointerMm : routed.at(-1), attempt.holding);
+  H.wires.setHandle(w, routed.at(-1), false);
 }
 
 function handleEvents(events, p) {
@@ -527,19 +579,21 @@ function frame() {
       for (const p of pointers.list) {
         if (!p.enabled || !p.work?.canGrab || p.pressOnPanel) continue;
         handleEvents(attempt.update(p.work.mm, true, p.work.grab, grabPoint()), p);
-        if (attempt?.holding) { owner = p; p.pinchUsed = true; break; }
+        if (attempt?.holding) { owner = p; p.pinchUsed = true; grabRope(p); break; }
       }
     } else {
       const p = owner;
       // A short tracking dropout keeps the wire in hand; a longer one drops it at the last peg.
       if (p.enabled) p.lostAt = null; else p.lostAt ??= now();
       const holding = p.enabled ? p.work.pressed : now() - p.lostAt < 300;
-      const events = attempt.update(p.enabled ? p.work.mm : null, holding, p.work.grab);
+      // the router follows the wire's real end, which stops short of the hand when the wire is taut
+      const endMm = holding ? stepRope(p, dt) : null;
+      const events = attempt.update(endMm, holding, p.work.grab);
       if (!attempt.holding) owner = null;
       handleEvents(events, p);
     }
     if (H.session.state === 'route' && attempt) {
-      updateLive(owner?.work.mm ?? null, owner?.work.freeEnd ?? null);
+      updateLive();
       if (ui.ghostUntil && now() > ui.ghostUntil) { ui.ghostUntil = 0; updateGuides(); }
       const sec = Math.floor(now() / 1000);
       if (sec !== ui.lastSecond) { ui.lastSecond = sec; refresh(); }

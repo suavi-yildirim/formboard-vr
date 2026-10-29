@@ -36,6 +36,7 @@ VW_SOURCE = "VW VOBES \"Old Beetle\" sample (prostep ivip ECAD wiki), CC BY-SA 4
 def read_kbl(path):
     h = ET.parse(path).getroot().find("Harness")
     connectors = {c.get("id"): c.get("description") for c in h.findall("Connector_occurrence")}
+    cavities = {c.get("id"): len(c.findall("Contact_point")) for c in h.findall("Connector_occurrence")}
     wires = {w.get("id"): w.attrib for w in h.findall("Wire_occurrence")}
     connections = []
     for c in h.findall("Connection"):
@@ -47,7 +48,7 @@ def read_kbl(path):
         for m in h.findall("Module")
     ]
     return {"id": h.get("id"), "description": h.get("description"),
-            "connectors": connectors, "wires": wires, "connections": connections, "modules": modules}
+            "connectors": connectors, "cavities": cavities, "wires": wires, "connections": connections, "modules": modules}
 
 
 def shortest_path(adj, start, goal):
@@ -88,6 +89,7 @@ def build(kbl, layout):
             if n["id"] not in kbl["connectors"]:
                 problems.append(f"layout connector {n['id']} not in KBL")
             node["label"] = kbl["connectors"].get(n["id"], n["id"])
+            node.update(shape="housing", housing_colour="BK", cavities=kbl["cavities"].get(n["id"], 2))
         nodes.append(node)
 
     wires = []

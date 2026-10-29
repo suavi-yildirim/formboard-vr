@@ -18,6 +18,10 @@ import numpy as np
 COLOURS = {"sw": "BK", "blk": "BK", "ws": "WH", "rt": "RD", "ro": "RD", "bl": "BU", "gn": "GN",
            "ge": "YE", "br": "BN", "gr": "GY", "vi": "VT", "li": "VT", "rs": "PK", "or": "OG"}
 
+# Connector housing colour from the German part description (default: black)
+HOUSING_COLOURS = {"SCHWARZ": "BK", "WEISS": "WH", "GRAU": "GY", "BRAUN": "BN", "BLAU": "BU",
+                   "GRUEN": "GN", "ROT": "RD", "GELB": "YE", "NATUR": "NT", "VIOLETT": "VT"}
+
 MIN_NODE_GAP_MM = 55     # nodes closer than this on the board push apart
 PEG_SPACING_MM = 160     # one fork peg per this much segment length
 
@@ -137,9 +141,10 @@ def formboard(path, title, source):
     k = Kbl(path)
     h = k.h
     # connectors and contact points
-    conn_name, cp_owner, cp_cavity = {}, {}, {}
+    conn_name, cp_owner, cp_cavity, conn_look = {}, {}, {}, {}
     for c in h.findall("Connector_occurrence"):
         conn_name[c.get("id")] = (c.findtext("Id"), c.findtext("Description") or "")
+        conn_look[c.get("id")] = connector_look(k, c)
         for cp in c.findall("Contact_points"):
             cp_owner[cp.get("id")] = c.get("id")
             cav = k.byid.get(cp.findtext("Contacted_cavity") or "")
@@ -193,7 +198,8 @@ def formboard(path, title, source):
         if n in node_conn:
             cid, desc = conn_name[node_conn[n]]
             name[n] = cid
-            out_nodes.append({"id": cid, "xy": rnd(xy[n]), "kind": "connector", "label": desc or cid, "kbl": n})
+            out_nodes.append({"id": cid, "xy": rnd(xy[n]), "kind": "connector", "label": desc or cid, "kbl": n,
+                              **conn_look[node_conn[n]]})
         else:
             if degree[n] > 2:
                 nb += 1
@@ -271,6 +277,25 @@ def formboard(path, title, source):
                        "mean_length_error_pct": round(float(sum(errs) / len(errs)) * 100, 2)},
         "skipped_connections": skipped,
     }
+
+
+def connector_look(k, c):
+    """How a connector looks on the board: shape, housing colour, number of cavities, part text."""
+    part = k.byid.get(c.findtext("Part") or "")
+    desc = (part.findtext("Description") if part is not None else "") or ""
+    usage = (c.findtext("Usage") or "").lower()
+    up = desc.upper()
+    if usage == "ring terminal" or "KABELSCHUH" in up:
+        shape = "ring"
+    elif usage == "splice":
+        shape = "splice"
+    elif "GLUEHKERZEN" in up or "ZUENDKERZEN" in up:
+        shape = "boot"
+    else:
+        shape = "housing"
+    colour = next((code for word, code in HOUSING_COLOURS.items() if word in up), "BK")
+    cavities = len(part.findall(".//Cavities")) if part is not None else 1
+    return {"shape": shape, "housing_colour": colour, "cavities": max(1, cavities), "part": desc}
 
 
 def walk(seg_ids, seg_by_id, start, goal):

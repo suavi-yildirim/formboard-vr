@@ -15,7 +15,7 @@ export class Panel {
     this.tex.colorSpace = THREE.SRGBColorSpace;
     this.mesh = new THREE.Mesh(
       new THREE.PlaneGeometry(widthM, (widthM * H) / W),
-      new THREE.MeshBasicMaterial({ map: this.tex, transparent: true, side: THREE.DoubleSide }),
+      new THREE.MeshBasicMaterial({ map: this.tex, transparent: true, side: THREE.DoubleSide, toneMapped: false }),
     );
     this.buttons = [];
     this.hoverId = null;

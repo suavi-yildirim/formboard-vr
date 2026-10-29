@@ -19,6 +19,7 @@ VR training for wire-harness assembly on a formboard. It runs in the browser on 
    - The wire snaps to the next correct peg, with sound and haptic feedback.
    - A wrong branch or a skipped peg flashes red and counts as an error. Passing near other pegs while staying on track does not.
    - Reaching the target connector completes the wire, and earlier wires fade back.
+   - **The wire behaves like a wire.** The free part between the last peg and your hand is a small rope simulation: it sags under gravity, lies on the board, and hangs over its edge. It is exactly as long as the wire really is, taken from the KBL file. For the VW harness the KBL lengths equal the flattened board paths, to the millimetre. Pull further than the wire reaches and it goes taut: the end stops short of your hand, and a controller gives a short buzz.
 4. **Two modes.**
    - **Guided** shows the path and the next peg.
    - **Test** shows only the target connector, so you route from the board drawing. Hints ("Show me") are counted.
@@ -40,10 +41,16 @@ Data in this repository:
 - **Door harness:** fictitious, from the [KBL knowledge-graph demo](https://github.com/suavi-yildirim/bordnetz-knowledge-graph).
 - **`data/vw/`:** the public Volkswagen VOBES "Old Beetle" sample (CC BY-SA 4.0, see `data/vw/SOURCE.md`).
 
+## Look
+
+- **Board:** plywood, with the 1:1 formboard drawing printed on paper and glued on: bundle outlines, centre lines, connector outlines and peg marks.
+- **Connectors:** modelled from their KBL parts. Housings are sized by cavity count and coloured from the part description (for example "SCHWARZ"), with a latch and a metal holder. Spark-plug connectors are rubber boots, ring terminals are copper lugs, and splices are heat-shrink sleeves. Each faces away from its wires.
+- **Light:** studio reflections on metal and insulation, filmic tone mapping, and one overhead work light. Wires, pegs, connectors and your hands cast shadows on the board, which also helps you judge depth when reaching.
+
 ## Structure
 
 ```
-src/core/    pure logic, unit tested: grid, harness (variants, bundles), router (snap/wrong/done), session (state machine, metrics)
+src/core/    pure logic, unit tested: grid, harness (variants, bundles), router (snap/wrong/done), session (state machine, metrics), rope (wire physics), rig (teleport maths)
 src/scene/   three.js: workshop, board, wires, panel, audio
 src/input/   one pointer model for hands, controllers and mouse
 tools/       KBL -> harness.json

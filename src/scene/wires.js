@@ -3,14 +3,14 @@
 import * as THREE from 'three';
 import { COLOURS } from '../core/harness.js';
 
-const WIRE_Z = 0.03; // wires lie in the peg forks
+export const WIRE_Z = 0.03; // wires lie in the peg forks
 const CONNECTOR_Z = 0.016;
 
 // Wire insulation: base colour with a lengthwise tracer stripe (Kennfarbe), as a small texture.
 const stripeCache = new Map();
 function wireMaterial(wire, extra = {}) {
   const base = COLOURS[wire.colour] ?? 0xcccccc;
-  if (!wire.stripe) return new THREE.MeshStandardMaterial({ color: base, roughness: 0.45, ...extra });
+  if (!wire.stripe) return new THREE.MeshStandardMaterial({ color: base, roughness: 0.38, ...extra });
   const key = `${wire.colour}/${wire.stripe}`;
   if (!stripeCache.has(key)) {
     const c = document.createElement('canvas');
@@ -24,7 +24,7 @@ function wireMaterial(wire, extra = {}) {
     t.magFilter = THREE.NearestFilter;
     stripeCache.set(key, t);
   }
-  return new THREE.MeshStandardMaterial({ color: 0xffffff, map: stripeCache.get(key), roughness: 0.45, ...extra });
+  return new THREE.MeshStandardMaterial({ color: 0xffffff, map: stripeCache.get(key), roughness: 0.38, ...extra });
 }
 
 export function wireRadius(crossSectionMm2) {
@@ -69,6 +69,7 @@ export class WireLayer {
     this.removeDone(wire.id);
     const mat = wireMaterial(wire, { transparent: true });
     const mesh = this.tube(this.points3(pointsMm), wireRadius(wire.cross_section_mm2), mat);
+    mesh.castShadow = true;
     this.group.add(mesh);
     this.done.set(wire.id, mesh);
   }
@@ -99,6 +100,17 @@ export class WireLayer {
     if (pts.length < 2) return;
     const mat = wireMaterial(wire, { emissive: COLOURS[wire.colour] ?? 0, emissiveIntensity: 0.2 });
     this.live = this.tube(pts, wireRadius(wire.cross_section_mm2), mat);
+    this.group.add(this.live);
+  }
+
+  // Held wire: routed part through the pegs, then the simulated free part (board-local points).
+  setLiveRope(wire, routedMm, ropePoints) {
+    this.clearLive();
+    const pts = [...this.points3(routedMm, [true, false]), ...ropePoints.slice(1).map((q) => new THREE.Vector3(q.x, q.y, q.z))];
+    if (pts.length < 2) return;
+    const mat = wireMaterial(wire, { emissive: COLOURS[wire.colour] ?? 0, emissiveIntensity: 0.15 });
+    this.live = this.tube(pts, wireRadius(wire.cross_section_mm2), mat);
+    this.live.castShadow = true;
     this.group.add(this.live);
   }
 

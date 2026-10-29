@@ -26,7 +26,7 @@ function sign(lines, width = 1024) {
   });
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(1.2, (1.2 * c.height) / c.width), new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide }));
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(1.2, (1.2 * c.height) / c.width), new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide, toneMapped: false }));
   return m;
 }
 
@@ -42,7 +42,7 @@ function label(text) {
   g.fillText(text, 128, 34, 240);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false }));
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false, toneMapped: false }));
   s.scale.set(0.12, 0.03, 1);
   return s;
 }

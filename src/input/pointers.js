@@ -136,6 +136,8 @@ export class Pointers {
   }
 
   updateTip(p) {
+    // hands cast shadows onto the board (depth cue when reaching); the model loads asynchronously
+    p.hand?.traverse((o) => { if (o.isMesh && !o.castShadow) o.castShadow = true; });
     const was = p.pinching;
     p.tip = null;
     if (p.tipMarker) p.tipMarker.visible = false;

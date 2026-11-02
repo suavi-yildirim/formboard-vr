@@ -16,6 +16,8 @@ Live: https://suavi-yildirim.github.io/formboard-vr/ · demo: `/demo/` (EN, `#de
   that can be expressed as maths goes there, with a unit test.
 - `src/main.js` wires core, scene and input together. All panel texts go through `src/i18n.js`
   (`t(key, params)`, `term()` for data labels, `colourName()`). Add every new string in **both** `en` and `de`.
+  - Language comes from `#de` / `#en`, then localStorage key `formboard-demo-lang` (shared with the demo page), then the browser language.
+  - The EN | DE switch is on the VR menu panel and in the help box. Changing it redraws the panels, the car sign and the board title.
 - One pointer model (`src/input/pointers.js`) for hands, controllers and mouse.
   - In VR, board work happens at the **pinch point** (`p.tip`), not by ray.
   - Rays only serve the panel and teleport.
@@ -62,6 +64,8 @@ Live: https://suavi-yildirim.github.io/formboard-vr/ · demo: `/demo/` (EN, `#de
   - Before publishing a clip, check its frames for system menus and passthrough views of the real room.
   - Check the audio envelope for voices.
 - Commit as Suavi Yildirim `<345443090+suavi-yildirim@users.noreply.github.com>`, without a co-author line.
+- Suavi edits this repo on GitHub too (he changed the README once). Run `git fetch` and check
+  `git log main..origin/main` before pushing, and keep his wording when merging.
 - After pushing, wait for Pages (about 30–60 s) and load the live page.
   - Browsers may cache old files for up to 10 min, so users can briefly see a mix of versions.
 - An unescaped apostrophe in a single-quoted JS string once took the site down. `npm test` now syntax-checks everything.
@@ -73,6 +77,8 @@ Live: https://suavi-yildirim.github.io/formboard-vr/ · demo: `/demo/` (EN, `#de
   - check frames with `sheet`
   - join parts with `montage` (0.5 s cross-fades), 1280×720, 3 Mbit/s, with audio
 - Each clip ships with a poster JPG (`frame`).
-- README previews are GIFs (`gif`, 320 px, 8 fps), because GitHub does not play repository MP4s in a README.
+- README previews are GIFs (`gif`, 288 px, 15 fps; the wiring preview is cut to its best 11 s), because GitHub
+  does not play repository MP4s in a README. At 8 fps they looked choppy.
+- Check GIF frame timing after writing (delay 7/100 s = 14.3 fps).
 - Demo page order: wiring by hand, finished formboard, real KBL data from an example car. Each video has a sound
   button (one with sound at a time) and a fullscreen button.
